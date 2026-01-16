@@ -8,4 +8,4 @@ The aim is to evaluate whether a passkey-first model with hardened recovery can 
 
 This repository currently focuses on passkey enrolment (registration) as a proof-of-concept implementation.
 
-> This is an academic research project and not a production-ready system.
+This is an academic research project 
