@@ -12,8 +12,5 @@ This is an academic research project
 
 
 # Current Commands and Development
-
-
-sudo service redis-server start
-then to start the server
+to start the server
 run Python app/app.py 
