@@ -1,12 +1,70 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Register</title>
-</head>
-<body>
-    <h1>Please Register Your Passkey Here, Or go to login if you have one already made</h1>
-    <a href="{{url_for('login')}}">Login Here</a>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Register (Passkey)</title>
+
+    <script src="https://unpkg.com/@simplewebauthn/browser/dist/bundle/index.umd.min.js"></script>
+  </head>
+
+  <body>
+    <h1>Create an account (Passkey)</h1>
+    <label>
+      Email
+      <input id="email" type="email" placeholder="you@example.com" />
+    </label>
+    <button id="btnRegister">Create passkey</button>
+
+    <pre id="msg" style="white-space: pre-wrap; margin-top: 16px;"></pre>
+
+    <p><a href="{{ url_for('index') }}">Back to home</a></p>
+
+    <script>
+      document.getElementById("btnRegister").addEventListener("click", async () => {
+        const email = document.getElementById("email").value;
+
+        try {
+          // get options from server
+          const startRes = await fetch("/register/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email }),
+          });
+
+          
+          const startText = await startRes.text();
+          if (!startRes.ok) throw new Error(`START failed ${startRes.status}: ${startText.slice(0, 120)}`);
+
+          const startData = JSON.parse(startText);
+
+          
+          const options = startData.publicKey ?? startData;
+
+          // 2) create passkey
+          const regResp = await SimpleWebAuthnBrowser.startRegistration(options);
+
+          // 3) FINISH: send credential to server
+          const finishRes = await fetch("/register/finish", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, credential: regResp }),
+          });
+
+          const finishText = await finishRes.text();
+          if (!finishRes.ok) throw new Error(`FINISH failed ${finishRes.status}: ${finishText.slice(0, 200)}`);
+
+          const finishData = JSON.parse(finishText);
+
+          if (finishData.ok) {
+            document.getElementById("msg").textContent = "Success: passkey saved.";
+          } else {
+            document.getElementById("msg").textContent = "Server rejected: " + JSON.stringify(finishData);
+          }
+        } catch (err) {
+          document.getElementById("msg").textContent = "Error: " + err.message;
+        }
+      });
+    </script>
+  </body>
 </html>

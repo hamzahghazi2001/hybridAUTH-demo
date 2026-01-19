@@ -9,3 +9,11 @@ The aim is to evaluate whether a passkey-first model with hardened recovery can 
 This repository currently focuses on passkey enrolment (registration) as a proof-of-concept implementation.
 
 This is an academic research project 
+
+
+# Current Commands and Development
+
+
+sudo service redis-server start
+then to start the server
+run Python app/app.py 
