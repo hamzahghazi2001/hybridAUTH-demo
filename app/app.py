@@ -3,28 +3,27 @@ import security
 from datetime import datetime, timezone
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template, request
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.exc import IntegrityError
+from flask_login import LoginManager
+from flask_wtf import wtforms
+
 
 load_dotenv()
 
 app = Flask(__name__)
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
 os.makedirs(app.instance_path, exist_ok=True)
 db_path = os.path.join(app.instance_path, "database.db")
 app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
-
-class User(db.Model):
+class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    
-    credentials = db.relationship('Credential', backref='user', lazy=True, cascade='all, delete-orphan')
-    challenges = db.relationship('WebAuthnChallenge', backref='user', lazy=True, cascade='all, delete-orphan')
-
 class Credential(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
@@ -33,6 +32,8 @@ class Credential(db.Model):
     sign_count = db.Column(db.Integer, default=0)
     transports = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    failed_login_attempts = db.Column(db.Integer, default=0)
+    locked_until = db.Column(db.DateTime, nullable=True)
 
 class WebAuthnChallenge(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -96,7 +97,7 @@ def register_start():
     # Basic email validation
     if "@" not in email or "." not in email:
         return jsonify({"error": "invalid_email"}), 400
-    
+    #query the database 
     user = User.query.filter_by(email=email).first()
     if user is None:
         user = User(email=email)

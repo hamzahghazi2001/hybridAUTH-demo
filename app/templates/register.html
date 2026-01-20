@@ -41,10 +41,10 @@
           
           const options = startData.publicKey ?? startData;
 
-          // 2) create passkey
+          //create passkey
           const regResp = await SimpleWebAuthnBrowser.startRegistration(options);
 
-          // 3) FINISH: send credential to server
+          //  send credential to server
           const finishRes = await fetch("/register/finish", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
