@@ -76,3 +76,27 @@ def verify_and_save_credential(user, registration_response, db, ChallengeModel, 
     except Exception as e:
         db.session.rollback()
         return {"ok": False, "error": "verification_failed", "details": str(e)}
+
+def prepare_authentication(user, credentials, db, ChallengeModel):
+    """Generate WebAuthn authentication options and store challenge."""
+    allowed_creds=[]
+    for creds in credentials:
+        allowed_creds.append({"type":"public-key",
+                            "id": base64.b64decode(creds.credential_id),
+                             "transports": (creds.transports).split(',') if cred.transports else []})
+
+    options = webauthn.generate_registration_options(
+        rp_id=_hostname(),
+        allowed_creds
+    )
+    challenge = ChallengeModel(
+        user_id=user.id,
+        challenge=base64.b64encode(options.challenge).decode('utf-8'),
+        type='authentication',
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=10)
+    )
+
+    db.session.add(challenge)
+    db.session.commit()
+
+    return(json.loads(webauthn.options_to_json(options)))
