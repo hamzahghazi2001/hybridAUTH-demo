@@ -2,22 +2,14 @@ import os
 import security
 from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
-<<<<<<< HEAD
-from flask import Flask, jsonify, render_template, request
-from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy.exc import IntegrityError
-=======
 from flask import Flask, jsonify, render_template, request, session, redirect, url_for
 from flask_login import UserMixin, LoginManager, login_user, logout_user, login_required, current_user
 from flask_sqlalchemy import SQLAlchemy
 from functools import wraps
->>>>>>> Login-logic
 
 load_dotenv()
 
 app = Flask(__name__)
-<<<<<<< HEAD
-=======
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
@@ -27,7 +19,6 @@ def load_user(user_id):
     return User.query.get(int(user_id))
 
 # Database setup
->>>>>>> Login-logic
 os.makedirs(app.instance_path, exist_ok=True)
 db_path = os.path.join(app.instance_path, "database.db")
 app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
@@ -35,12 +26,8 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
 
-<<<<<<< HEAD
-class User(db.Model):
-=======
 # Models
 class User(db.Model, UserMixin):
->>>>>>> Login-logic
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
