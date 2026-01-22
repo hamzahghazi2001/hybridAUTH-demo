@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Re-authenticate</title>
+    <script src="https://unpkg.com/@simplewebauthn/browser/dist/bundle/index.umd.min.js"></script>
+</head>
+<body>
+    <h1>Please Re-authenticate</h1>
+    <p>Your session has expired. Please verify your identity with your passkey.</p>
+    
+    <button id="btnReauth">Verify with Passkey</button>
+    <pre id="msg"></pre>
+
+    <p><a href="{{ url_for('logout') }}">Logout</a></p>
+
+    <script>
+        document.getElementById("btnReauth").addEventListener("click", async () => {
+            try {
+                // Use current user's email (you'd need to pass this from backend)
+                const startRes = await fetch("/login/start", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email: "{{ current_user.email }}" }),
+                });
+
+                const startData = await startRes.json();
+                if (!startRes.ok) throw new Error(`START failed: ${startData.error}`);
+
+                const authResp = await SimpleWebAuthnBrowser.startAuthentication(startData);
+                
+                const finishRes = await fetch("/login/finish", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email: "{{ current_user.email }}", credential: authResp })
+                });
+
+                const finishData = await finishRes.json();
+            
+                if (finishData.ok) {
+                    window.location.href = finishData.redirect || "/dashboard";
+                } else {
+                    document.getElementById("msg").textContent = "Error: " + finishData.error;
+                }
+                
+            } catch (err) {
+                document.getElementById("msg").textContent = "Error: " + err.message;
+            }
+        });
+    </script>
+</body>
+</html>
