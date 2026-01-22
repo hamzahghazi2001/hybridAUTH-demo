@@ -1,13 +1,59 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Login Page</title>
-</head>
-<body>
-    <h1>Please Login Or Register An Account</h1>
-    <a href="{{url_for('register')}}">Register Here</a>
 
-</body>
+    <script src="https://unpkg.com/@simplewebauthn/browser/dist/bundle/index.umd.min.js"></script>
+  </head>
+
+  <body>
+        <h1>Log in with Passkey</h1>
+    <label>
+    Email
+    <input id="email" type="email" placeholder="you@example.com" />
+    </label>
+    <button id="btnLogin">Log in</button>
+    <pre id="msg"></pre>
+
+    <p><a href="{{ url_for('index') }}">Back to home</a></p>
+
+    <script>
+        document.getElementById("btnLogin").addEventListener("click", async () => {
+        const email = document.getElementById("email").value;
+
+        try {
+          // get options from server
+          const startRes = await fetch("/login/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email }),
+          });
+
+            const startData = await startRes.json();  // ← Parse JSON, not text
+            if (!startRes.ok) throw new Error(`START failed: ${startData.error}`);
+
+            const authResp = await SimpleWebAuthnBrowser.startAuthentication(startData);
+            const finishRes = await fetch("/login/finish", {
+           
+                method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, credential: authResp })
+            });
+
+             const finishData = await finishRes.json();
+        
+            if (finishData.ok) {
+            window.location.href = finishData.redirect; 
+            } else {
+            document.getElementById("msg").textContent = "Error: " + finishData.error;
+            }
+            
+        } catch (err) {
+            document.getElementById("msg").textContent = "Error: " + err.message;
+        }
+        });
+    </script>
+  </body>
 </html>
