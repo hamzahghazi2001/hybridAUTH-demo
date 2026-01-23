@@ -59,6 +59,15 @@ class WebAuthnChallenge(db.Model):
     used_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
+class RecoveryToken(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    token = db.Column(db.String(100), unique=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    expires_at = db.Column(db.DateTime, nullable=False)
+    used = db.Column(db.Boolean,nullable=True)
+
+
 # Decorator for recent auth requirement
 def require_recent_auth(max_age_minutes=10):
     def decorator(f):
@@ -258,5 +267,6 @@ def login_finish():
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
+
         print("Database tables created successfully.")
     app.run(debug=True)
