@@ -1,5 +1,8 @@
 import os
+import secrets
 import security
+import smtplib
+from email.mime.text import MIMEText
 from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request, session, redirect, url_for
@@ -30,7 +33,7 @@ db = SQLAlchemy(app)
 class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
     failed_login_attempts = db.Column(db.Integer, default=0)
     locked_until = db.Column(db.DateTime, nullable=True)
     credentials = db.relationship('Credential', backref='user', lazy=True, cascade='all, delete-orphan')
@@ -48,7 +51,7 @@ class Credential(db.Model):
     public_key = db.Column(db.Text, nullable=False)
     sign_count = db.Column(db.Integer, default=0)
     transports = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 class WebAuthnChallenge(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -57,17 +60,66 @@ class WebAuthnChallenge(db.Model):
     type = db.Column(db.String(50), nullable=False)
     expires_at = db.Column(db.DateTime, nullable=False)
     used_at = db.Column(db.DateTime, nullable=True)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 class RecoveryToken(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     token = db.Column(db.String(100), unique=True)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
     expires_at = db.Column(db.DateTime, nullable=False)
     used = db.Column(db.Boolean,nullable=True)
 
+    def is_valid(self):
+        """Check if token can still be used"""
+        now = datetime.utcnow() 
+        expires_at = self.expires_at.replace(tzinfo=None) if self.expires_at.tzinfo else self.expires_at
+        
+        if now <= expires_at and self.used != True:
+            return True
+        return False
 
+def send_recovery_email(user_email, token):
+    """
+    Send recovery email with magic link
+    """
+    try:
+        # Step 1: Build the recovery URL
+        recovery_url = f"http://localhost:5000/recover?token={token}"
+        
+        # Step 2: Create email body
+        email_body = f"""
+Hello,
+
+You requested a login link for your account.
+
+Click here to log in:
+{recovery_url}
+
+This link is valid for 15 minutes and can only be used once.
+
+If you didn't request this, ignore this email.
+
+Thanks,
+Your App Team
+        """
+        
+        # Step 3: Create email message
+        msg = MIMEText(email_body)
+        msg['Subject'] = 'Your Login Link'
+        msg['From'] = 'noreply@yourapp.com'
+        msg['To'] = user_email
+        
+        # Step 4: Send via Mailpit (localhost:1025)
+        with smtplib.SMTP('localhost', 1025) as server:
+            server.send_message(msg)
+        
+        print(f"Email sent to {user_email}")
+        return True
+        
+    except Exception as e:
+        print(f" Error sending email: {e}")
+        return False
 # Decorator for recent auth requirement
 def require_recent_auth(max_age_minutes=10):
     def decorator(f):
@@ -127,6 +179,107 @@ def reauth():
 @require_recent_auth(max_age_minutes=10)
 def change_email():
     return render_template('change_email.html')
+
+@app.route('/recover-request', methods=['GET', 'POST'])
+def recover_request():
+    if request.method == 'GET':
+        return "Form will go here"
+    data = request.get_json() or {}
+    email = data.get('email', '').strip().lower()
+    if not email or '@' not in email:
+        return jsonify({"error": "Invalid email"}), 400
+    
+    user = User.query.filter_by(email=email).first()
+    
+    if not user:
+        # Pretend message
+        return jsonify({"ok": True, "message": "If account exists, email sent"})
+    
+    #Rate limiting check
+    now = datetime.now(timezone.utc)
+    previous_token = RecoveryToken.query.filter_by(
+        user_id=user.id, 
+        used=False
+    ).order_by(RecoveryToken.created_at.desc()).first()
+
+    if previous_token:
+        db_created_at = previous_token.created_at
+        if db_created_at.tzinfo is None:
+            db_created_at = db_created_at.replace(tzinfo=timezone.utc)
+
+        time_since_last = now - db_created_at
+        
+        if time_since_last < timedelta(minutes=5):
+            # Too soon!
+            seconds_elapsed = int(time_since_last.total_seconds())
+            minutes_left = 5 - (seconds_elapsed // 60)
+            return f"""
+            <pre>
+            Too many requests. Please wait {minutes_left} more minute(s).
+            
+            Token: {previous_token.token[:20]}...
+            Created (UTC): {db_created_at}
+            </pre>
+            """
+        else:
+            RecoveryToken.query.filter_by(user_id=user.id, used=False).delete()
+            db.session.commit()
+
+    #Generate new token
+    token_string = secrets.token_urlsafe(32)
+    expires_at = now + timedelta(minutes=15) 
+
+    recovery_token = RecoveryToken(
+        user_id=user.id,
+        token=token_string,
+        created_at=now,
+        expires_at=expires_at,
+        used=False
+    )
+
+    db.session.add(recovery_token)
+    db.session.commit()
+    
+    
+    send_recovery_email(user.email, token_string) 
+    return jsonify({
+        "ok": True,
+        "message": "If account exists, recovery link sent"
+    })
+
+@app.route('/recover')
+def recover():
+    """Process recovery link from email"""
+    
+    token_string = request.args.get('token')
+
+    if not token_string:
+        return "Invalid link, 400"
+    token = RecoveryToken.query.filter_by(token=token_string).first()
+    
+    if not token:
+        return "Invalid or expired link", 400
+    
+    # Check if token is valid 
+    if not token.is_valid():
+        # Figure out WHY it's invalid
+        if token.used:
+            return "This link has already been used. Request a new one.", 400
+        else:
+            return "This link has expired. Request a new one.", 400
+    
+    #  Mark token as used 
+    token.used = True
+    db.session.commit()
+    
+    user = User.query.filter_by(id=token.user_id).first()
+    
+    # Log them User in 
+    login_user(user, remember=True)
+    session['last_auth_time'] = datetime.now(timezone.utc).isoformat()
+    
+    # Redirect to dashboard
+    return redirect(url_for('dashboard'))
 
 # Registration endpoints
 @app.route("/register/start", methods=["POST"])
