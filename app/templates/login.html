@@ -18,7 +18,12 @@
     <pre id="msg"></pre>
 
     <p><a href="{{ url_for('index') }}">Back to home</a></p>
-
+    <p style="margin-top: 20px; color: #666;">
+    Lost your device? 
+    <a href="{{ url_for('recover_request') }}" style="color: #0066cc;">
+        Get a login link via email
+    </a>
+</p>
     <script>
         document.getElementById("btnLogin").addEventListener("click", async () => {
         const email = document.getElementById("email").value;
@@ -31,13 +36,13 @@
             body: JSON.stringify({ email }),
           });
 
-            const startData = await startRes.json();  // ← Parse JSON, not text
+            const startData = await startRes.json();  
             if (!startRes.ok) throw new Error(`START failed: ${startData.error}`);
 
             const authResp = await SimpleWebAuthnBrowser.startAuthentication(startData);
             const finishRes = await fetch("/login/finish", {
            
-                method: "POST",
+              method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email, credential: authResp })
             });

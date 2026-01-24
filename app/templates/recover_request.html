@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recovery Page</title>
+</head>
+<body>
+    <p>Please enter email here for account recovery</p>
+    <input type="email" id="email" placeholder="you@example.com">
+    <button id="btnRequest">Send Login Link</button>
+    <pre id="msg"></pre>
+     <p>
+    <a href="{{ url_for('login') }}">← Back to login</a> | 
+    <a href="{{ url_for('index') }}">Back to home</a>
+</p>
+</body>
+<script>
+    document.getElementById('btnRequest').addEventListener('click', async () => {
+    
+        const email = document.getElementById('email').value
+        const msg = document.getElementById('msg')
+    
+        if (!email) {
+            msg.textContent = 'Please enter your email'
+
+        }
+        try {
+            const response = await fetch('/recover-request', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: email })  
+            })
+            
+            const data = await response.json()
+            if (data.ok) {
+                msg.textContent = data.message + '\n\nCheck Mailpit at http://localhost:8025'
+            } else {
+                msg.textContent = 'Error: ' + (data.error || 'Unknown error')
+            }
+            
+        } catch (err) {
+            msg.textContent = 'Network error: ' + err.message
+        }
+    })
+</script>
+</html>

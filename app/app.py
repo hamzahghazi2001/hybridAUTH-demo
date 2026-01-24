@@ -2,6 +2,7 @@ import os
 import secrets
 import security
 import smtplib
+import hashlib
 from email.mime.text import MIMEText
 from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
@@ -183,7 +184,7 @@ def change_email():
 @app.route('/recover-request', methods=['GET', 'POST'])
 def recover_request():
     if request.method == 'GET':
-        return "Form will go here"
+        return render_template('recover_request.html')
     data = request.get_json() or {}
     email = data.get('email', '').strip().lower()
     if not email or '@' not in email:
@@ -210,33 +211,29 @@ def recover_request():
         time_since_last = now - db_created_at
         
         if time_since_last < timedelta(minutes=5):
-            # Too soon!
             seconds_elapsed = int(time_since_last.total_seconds())
             minutes_left = 5 - (seconds_elapsed // 60)
-            return f"""
-            <pre>
-            Too many requests. Please wait {minutes_left} more minute(s).
-            
-            Token: {previous_token.token[:20]}...
-            Created (UTC): {db_created_at}
-            </pre>
-            """
+            return jsonify({
+                "ok": False,
+                "error": f"Too many requests. Please wait {minutes_left} more minute(s)."
+            }), 429 
         else:
             RecoveryToken.query.filter_by(user_id=user.id, used=False).delete()
             db.session.commit()
 
+
     #Generate new token
     token_string = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(token_string.encode()).hexdigest() 
     expires_at = now + timedelta(minutes=15) 
 
     recovery_token = RecoveryToken(
         user_id=user.id,
-        token=token_string,
+        token=token_hash, 
         created_at=now,
         expires_at=expires_at,
         used=False
     )
-
     db.session.add(recovery_token)
     db.session.commit()
     
@@ -250,13 +247,16 @@ def recover_request():
 @app.route('/recover')
 def recover():
     """Process recovery link from email"""
-    
+        
     token_string = request.args.get('token')
 
     if not token_string:
-        return "Invalid link, 400"
-    token = RecoveryToken.query.filter_by(token=token_string).first()
-    
+        return "Invalid link", 400
+
+    # Hash the incoming token to compare with stored hash
+    token_hash = hashlib.sha256(token_string.encode()).hexdigest()
+    token = RecoveryToken.query.filter_by(token=token_hash).first()
+
     if not token:
         return "Invalid or expired link", 400
     
