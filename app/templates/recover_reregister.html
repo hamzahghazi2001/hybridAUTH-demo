@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Register New Passkey</title>
+
+    <!-- same browser lib used in your register page -->
+    <script src="https://unpkg.com/@simplewebauthn/browser/dist/bundle/index.umd.min.js"></script>
+  </head>
+
+  <body>
+    <h1>Account recovered</h1>
+    <p>For security, register a new passkey.</p>
+
+    <label>
+      Recovery email
+      <!-- not editable -->
+      <input id="email" type="email" value="{{ email }}" readonly />
+    </label>
+
+    <button id="btnRegister">Register new passkey</button>
+
+    <pre id="msg" style="white-space: pre-wrap; margin-top: 16px;"></pre>
+
+    <script>
+      const email = "{{ email }}";
+      const msgEl = document.getElementById("msg");
+
+      document.getElementById("btnRegister").addEventListener("click", async () => {
+        try {
+          msgEl.textContent = "Starting passkey registration...";
+          const email = document.getElementById("email").value;
+
+          // START: copy the same "read text -> parse JSON" pattern
+          const startRes = await fetch("/register/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, reregister: true }),
+          });
+
+          const startText = await startRes.text();
+          if (!startRes.ok) {
+            throw new Error(`START failed ${startRes.status}: ${startText.slice(0, 200)}`);
+          }
+
+          const startData = JSON.parse(startText);
+          const options = startData.publicKey ?? startData;
+
+          msgEl.textContent = "Approve the passkey prompt on your device...";
+
+          // WebAuthn create
+          const regResp = await SimpleWebAuthnBrowser.startRegistration(options);
+
+          msgEl.textContent = "Verifying passkey...";
+
+          // FINISH: same pattern as your register page
+          const finishRes = await fetch("/register/finish", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, credential: regResp, reregister: true }),
+          });
+
+          const finishText = await finishRes.text();
+          if (!finishRes.ok) {
+            throw new Error(`FINISH failed ${finishRes.status}: ${finishText.slice(0, 200)}`);
+          }
+
+          const finishData = JSON.parse(finishText);
+
+          if (finishData.ok) {
+            msgEl.textContent = "Success: new passkey saved. Redirecting...";
+            setTimeout(() => (window.location.href = "/dashboard"), 800);
+          } else {
+            msgEl.textContent = "Server rejected: " + JSON.stringify(finishData);
+          }
+        } catch (err) {
+          msgEl.textContent = "Error: " + err.message;
+        }
+      });
+    </script>
+  </body>
+</html>

@@ -278,27 +278,41 @@ def recover():
     login_user(user, remember=True)
     session['last_auth_time'] = datetime.now(timezone.utc).isoformat()
     
+    # Mark user MUST re-enroll
+    session['needs_passkey_reregister'] = True
+
     # Redirect to dashboard
-    return redirect(url_for('dashboard'))
+    return redirect(url_for('recover_reregister'))
+
+@app.route('/recover/reregister')
+@login_required
+def recover_reregister():
+    if not session.get('needs_passkey_reregister'):
+        return redirect(url_for('dashboard'))
+
+    return render_template('recover_reregister.html', email=current_user.email)
 
 # Registration endpoints
 @app.route("/register/start", methods=["POST"])
 def register_start():
-    """Start passkey registration process."""
     data = request.get_json() or {}
     email = data.get("email", "").strip().lower()
-    
-    # Validate email
+
     if not email or "@" not in email or "." not in email:
         return jsonify({"error": "invalid_email"}), 400
-    
-    # Get or create user
+
+    is_reregister = bool(data.get("reregister", False))
+
     user = User.query.filter_by(email=email).first()
+
+    if user and not is_reregister:
+        return jsonify({"error": "Already a user"}), 400
+
     if not user:
         user = User(email=email)
         db.session.add(user)
         db.session.commit()
-    
+
     try:
         options = security.prepare_credential_creation(
             user=user,
@@ -331,7 +345,14 @@ def register_finish():
         ChallengeModel=WebAuthnChallenge,
         CredentialModel=Credential
     )
-    
+
+    # clear the flag
+    if result.get("ok"):
+        data = request.get_json() or {}
+        is_reregister = data.get('reregister', False)
+        if is_reregister:
+            session['needs_passkey_reregister'] = False
+
     return jsonify(result) if result.get("ok") else (jsonify(result), 400)
 
 # Login endpoints
