@@ -7,7 +7,7 @@ from flask import Flask, jsonify, render_template, request, session, redirect, u
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from models import db, User, Credential, WebAuthnChallenge, RecoveryToken, BackupCode
 import security
-from helpers import require_recent_auth, send_recovery_email, generate_backup_codes
+from helpers import require_recent_auth, send_recovery_email, generate_backup_codes, verify_backup_code
 
 load_dotenv()
 
@@ -130,7 +130,7 @@ def recover_request():
         "message": "If account exists, recovery link sent"
     })
 
-@app.route('/recover')
+@app.route('/recover/email')
 def recover():
     """Process recovery link from email"""
         
@@ -169,6 +169,53 @@ def recover():
 
     # Redirect to dashboard
     return redirect(url_for('recover_reregister'))
+
+@app.route('/login/backup', methods=['GET', 'POST'])
+def login_backup():
+    """Login using backup code"""
+    if request.method == 'GET':
+        return render_template('login_backup.html')
+    
+    data = request.get_json() or {}
+    user = User.query.filter_by(email=email).first()
+    code_hash = hashlib.sha256(input_code.encode()).hexdigest()
+    backupcode = BackupCode.query.filter_by(code_hash=code_hash).first()
+    now = datetime.utcnow() 
+    if user.locked_until > now:
+        return ("error": f"Account is locked unitil {user.locked_until}", 400)
+    else:
+        if backupcode:
+            # Log them User in 
+            login_user(user, remember=True)
+            session['last_auth_time'] = datetime.now(timezone.utc).isoformat()
+            backupcode.used=True
+            backupcode.used_at = now
+            db.session.commit()
+        else:
+            user.failed_login_attempts += 1
+            if user.failed_login_attempts >= 5:
+                user.locked_until = datetime.now(timezone.utc) + timedelta(minutes=60)
+            db.session.commit()
+            
+            if user.locked_until and user.locked_until > datetime.now(timezone.utc):
+                return jsonify({"error": "account_locked"}), 403
+            
+            return jsonify({"error": "invalid_credentials"}), 401
+
+    # Mark user MUST re-enroll
+    session['needs_passkey_reregister'] = True
+    return redirect(url_for('recover_reregister'))
+
+@app.route('/backup-codes/generate', methods=['POST'])
+@login_required
+@require_recent_auth(max_age_minutes=10)
+def generate_backup_codes_route():
+    codes = generate_backup_codes(db, BackupCode, current_user.id)
+    return jsonify({
+        "ok": True,
+        "codes": codes,
+        "message": "Save these codes securely. They won't be shown again."
+    })
 
 @app.route('/recover/reregister')
 @login_required
@@ -209,18 +256,6 @@ def register_start():
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
-
-
-@app.route('/backup-codes/generate', methods=['POST'])
-@login_required
-@require_recent_auth(max_age_minutes=10)
-def generate_backup_codes_route():
-    codes = generate_backup_codes(db, BackupCode, current_user.id)
-    return jsonify({
-        "ok": True,
-        "codes": codes,
-        "message": "Save these codes securely. They won't be shown again."
-    })
 
 
 @app.route("/register/finish", methods=["POST"])

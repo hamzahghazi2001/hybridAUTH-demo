@@ -13,7 +13,7 @@ def send_recovery_email(user_email, token):
     """
     try:
         #Build the recovery URL
-        recovery_url = f"http://localhost:5000/recover?token={token}"
+        recovery_url = f"http://localhost:5000/recover/email?token={token}"
         
         #Create email body
         email_body = f"""
@@ -94,3 +94,18 @@ def generate_backup_codes(db, BackupCode, user_id, count=5):
     
     db.session.commit()
     return plaintext_codes
+
+def verify_backup_code(db, BackupCode, user_id, code):
+    """Verify and consume a backup code."""
+    input_code = code.strip(" ").upper()
+    code_hash = hashlib.sha256(input_code.encode()).hexdigest()
+
+    backup_code=BackupCode.query.filter_by(user_id=user_id, code_hash=code_hash, used=False).first()
+
+    if not backup_code.code_hash == code_hash:
+        return False
+    else:
+        backup_code.used = True
+        backup_code.used_at = datetime.now(timezone.utc)
+        db.session.commit()
+    return True
