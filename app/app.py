@@ -1,15 +1,13 @@
 import os
 import secrets
-import security
-import smtplib
 import hashlib
-from email.mime.text import MIMEText
 from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request, session, redirect, url_for
-from flask_login import UserMixin, LoginManager, login_user, logout_user, login_required, current_user
-from flask_sqlalchemy import SQLAlchemy
-from functools import wraps
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from models import db, User, Credential, WebAuthnChallenge, RecoveryToken, BackupCode
+import security
+from helpers import require_recent_auth, send_recovery_email, generate_backup_codes
 
 load_dotenv()
 
@@ -28,119 +26,7 @@ db_path = os.path.join(app.instance_path, "database.db")
 app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-db = SQLAlchemy(app)
-
-# Models
-class User(db.Model, UserMixin):
-    id = db.Column(db.Integer, primary_key=True)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    failed_login_attempts = db.Column(db.Integer, default=0)
-    locked_until = db.Column(db.DateTime, nullable=True)
-    credentials = db.relationship('Credential', backref='user', lazy=True, cascade='all, delete-orphan')
-    challenges = db.relationship('WebAuthnChallenge', backref='user', lazy=True, cascade='all, delete-orphan')
-
-    def is_active(self):
-        if self.locked_until and self.locked_until > datetime.now(timezone.utc):
-            return False
-        return True
-
-class Credential(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    credential_id = db.Column(db.Text, nullable=False, unique=True)
-    public_key = db.Column(db.Text, nullable=False)
-    sign_count = db.Column(db.Integer, default=0)
-    transports = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-class WebAuthnChallenge(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    challenge = db.Column(db.Text, nullable=False)
-    type = db.Column(db.String(50), nullable=False)
-    expires_at = db.Column(db.DateTime, nullable=False)
-    used_at = db.Column(db.DateTime, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-class RecoveryToken(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    token = db.Column(db.String(100), unique=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    expires_at = db.Column(db.DateTime, nullable=False)
-    used = db.Column(db.Boolean,nullable=True)
-
-    def is_valid(self):
-        """Check if token can still be used"""
-        now = datetime.utcnow() 
-        expires_at = self.expires_at.replace(tzinfo=None) if self.expires_at.tzinfo else self.expires_at
-        
-        if now <= expires_at and self.used != True:
-            return True
-        return False
-
-def send_recovery_email(user_email, token):
-    """
-    Send recovery email with magic link
-    """
-    try:
-        # Step 1: Build the recovery URL
-        recovery_url = f"http://localhost:5000/recover?token={token}"
-        
-        # Step 2: Create email body
-        email_body = f"""
-Hello,
-
-You requested a login link for your account.
-
-Click here to log in:
-{recovery_url}
-
-This link is valid for 15 minutes and can only be used once.
-
-If you didn't request this, ignore this email.
-
-Thanks,
-Your App Team
-        """
-        
-        # Step 3: Create email message
-        msg = MIMEText(email_body)
-        msg['Subject'] = 'Your Login Link'
-        msg['From'] = 'noreply@yourapp.com'
-        msg['To'] = user_email
-        
-        # Step 4: Send via Mailpit (localhost:1025)
-        with smtplib.SMTP('localhost', 1025) as server:
-            server.send_message(msg)
-        
-        print(f"Email sent to {user_email}")
-        return True
-        
-    except Exception as e:
-        print(f" Error sending email: {e}")
-        return False
-# Decorator for recent auth requirement
-def require_recent_auth(max_age_minutes=10):
-    def decorator(f):
-        @wraps(f)
-        @login_required
-        def decorated_function(*args, **kwargs):
-            last_auth = session.get('last_auth_time')
-            
-            if not last_auth:
-                return redirect(url_for('reauth'))
-            
-            last_auth_dt = datetime.fromisoformat(last_auth)
-            age = datetime.now(timezone.utc) - last_auth_dt
-            
-            if age > timedelta(minutes=max_age_minutes):
-                return redirect(url_for('reauth'))
-            
-            return f(*args, **kwargs)
-        return decorated_function
-    return decorator
+db.init_app(app) 
 
 # Routes
 @app.route('/health', methods=['GET'])
@@ -179,7 +65,7 @@ def reauth():
 @app.route('/settings/change-email')
 @require_recent_auth(max_age_minutes=10)
 def change_email():
-    return render_template('change_email.html')
+    return render_template('change_email.html',email=current_user.email)
 
 @app.route('/recover-request', methods=['GET', 'POST'])
 def recover_request():
@@ -323,6 +209,19 @@ def register_start():
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
+
+
+@app.route('/backup-codes/generate', methods=['POST'])
+@login_required
+@require_recent_auth(max_age_minutes=10)
+def generate_backup_codes_route():
+    codes = generate_backup_codes(db, BackupCode, current_user.id)
+    return jsonify({
+        "ok": True,
+        "codes": codes,
+        "message": "Save these codes securely. They won't be shown again."
+    })
+
 
 @app.route("/register/finish", methods=["POST"])
 def register_finish():

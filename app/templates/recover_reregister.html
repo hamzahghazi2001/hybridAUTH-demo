@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Register New Passkey</title>
 
-    <!-- same browser lib used in your register page -->
     <script src="https://unpkg.com/@simplewebauthn/browser/dist/bundle/index.umd.min.js"></script>
   </head>
 
@@ -15,7 +14,6 @@
 
     <label>
       Recovery email
-      <!-- not editable -->
       <input id="email" type="email" value="{{ email }}" readonly />
     </label>
 
@@ -31,8 +29,6 @@
         try {
           msgEl.textContent = "Starting passkey registration...";
           const email = document.getElementById("email").value;
-
-          // START: copy the same "read text -> parse JSON" pattern
           const startRes = await fetch("/register/start", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -54,7 +50,7 @@
 
           msgEl.textContent = "Verifying passkey...";
 
-          // FINISH: same pattern as your register page
+          
           const finishRes = await fetch("/register/finish", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
