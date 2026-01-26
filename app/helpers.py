@@ -102,7 +102,7 @@ def verify_backup_code(db, BackupCode, user_id, code):
 
     backup_code=BackupCode.query.filter_by(user_id=user_id, code_hash=code_hash, used=False).first()
 
-    if not backup_code.code_hash == code_hash:
+    if not backup_code:  
         return False
     else:
         backup_code.used = True

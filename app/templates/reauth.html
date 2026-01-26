@@ -18,7 +18,6 @@
     <script>
         document.getElementById("btnReauth").addEventListener("click", async () => {
             try {
-                // Use current user's email (you'd need to pass this from backend)
                 const startRes = await fetch("/login/start", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },

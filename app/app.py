@@ -62,15 +62,25 @@ def logout():
 def reauth():
     return render_template('reauth.html')
 
+@app.route('/settings')
+@require_recent_auth(max_age_minutes=10)
+def settings():
+    return render_template('settings.html',email=current_user.email)
+
 @app.route('/settings/change-email')
 @require_recent_auth(max_age_minutes=10)
-def change_email():
+def change_Code():
     return render_template('change_email.html',email=current_user.email)
 
-@app.route('/recover-request', methods=['GET', 'POST'])
+@app.route('/settings/backup-code')
+@require_recent_auth(max_age_minutes=10)
+def change_email():
+    return render_template('genbackup.html')
+
+@app.route('/login/email-request', methods=['GET', 'POST'])
 def recover_request():
     if request.method == 'GET':
-        return render_template('recover_request.html')
+        return render_template('login_email.html')
     data = request.get_json() or {}
     email = data.get('email', '').strip().lower()
     if not email or '@' not in email:
@@ -164,47 +174,67 @@ def recover():
     login_user(user, remember=True)
     session['last_auth_time'] = datetime.now(timezone.utc).isoformat()
     
-    # Mark user MUST re-enroll
+    # Mark user re-enroll
     session['needs_passkey_reregister'] = True
 
     # Redirect to dashboard
     return redirect(url_for('recover_reregister'))
 
-@app.route('/login/backup', methods=['GET', 'POST'])
+@app.route("/login/backup-code", methods=["GET", "POST"])
 def login_backup():
-    """Login using backup code"""
-    if request.method == 'GET':
-        return render_template('login_backup.html')
-    
-    data = request.get_json() or {}
-    user = User.query.filter_by(email=email).first()
-    code_hash = hashlib.sha256(input_code.encode()).hexdigest()
-    backupcode = BackupCode.query.filter_by(code_hash=code_hash).first()
-    now = datetime.utcnow() 
-    if user.locked_until > now:
-        return ("error": f"Account is locked unitil {user.locked_until}", 400)
-    else:
-        if backupcode:
-            # Log them User in 
-            login_user(user, remember=True)
-            session['last_auth_time'] = datetime.now(timezone.utc).isoformat()
-            backupcode.used=True
-            backupcode.used_at = now
-            db.session.commit()
-        else:
-            user.failed_login_attempts += 1
-            if user.failed_login_attempts >= 5:
-                user.locked_until = datetime.now(timezone.utc) + timedelta(minutes=60)
-            db.session.commit()
-            
-            if user.locked_until and user.locked_until > datetime.now(timezone.utc):
-                return jsonify({"error": "account_locked"}), 403
-            
-            return jsonify({"error": "invalid_credentials"}), 401
+    if request.method == "GET":
+        return render_template("login_backup.html")
 
-    # Mark user MUST re-enroll
-    session['needs_passkey_reregister'] = True
-    return redirect(url_for('recover_reregister'))
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+    code = (data.get("code") or "").strip()
+
+    if not email or "@" not in email or "." not in email:
+        return jsonify({"error": "invalid_email"}), 400
+    if not code:
+        return jsonify({"error": "invalid_code"}), 400
+
+    user = User.query.filter_by(email=email).first()
+    if not user:
+        return jsonify({"error": "invalid_credentials"}), 401
+
+    now = datetime.now(timezone.utc)
+
+    locked_until = user.locked_until
+    if locked_until and locked_until.tzinfo is None:
+        locked_until = locked_until.replace(tzinfo=timezone.utc)
+
+    if locked_until and locked_until > now:
+        return jsonify({"error": "account_locked", "locked_until": locked_until.isoformat()}), 403
+
+    ok = verify_backup_code(db, BackupCode, user.id, code)
+
+    if ok:
+        user.failed_login_attempts = 0
+        user.locked_until = None
+        db.session.commit()
+
+        login_user(user, remember=True)
+        session["last_auth_time"] = now.isoformat()
+        session["needs_passkey_reregister"] = True
+
+        return jsonify({"ok": True, "redirect": url_for("recover_reregister")}), 200
+
+    # failure
+    user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
+    if user.failed_login_attempts >= 5:
+        user.locked_until = now + timedelta(seconds=60)
+    db.session.commit()
+
+    locked_until = user.locked_until
+    if locked_until and locked_until.tzinfo is None:
+        locked_until = locked_until.replace(tzinfo=timezone.utc)
+
+    if locked_until and locked_until > now:
+        return jsonify({"error": "account_locked", "locked_until": locked_until.isoformat()}), 403
+
+    return jsonify({"error": "invalid_credentials"}), 401
+
 
 @app.route('/backup-codes/generate', methods=['POST'])
 @login_required
@@ -365,7 +395,7 @@ def login_finish():
         
         # Lock account after 5 failed attempts
         if user.failed_login_attempts >= 5:
-            user.locked_until = datetime.now(timezone.utc) + timedelta(minutes=60)
+            user.locked_until = datetime.now(timezone.utc) + timedelta(seconds=60)
             db.session.commit()
             return jsonify({"ok": False, "error": "account_locked"}), 403
         

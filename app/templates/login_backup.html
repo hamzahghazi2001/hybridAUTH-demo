@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Backup Code</title>
+
+    <script src="https://unpkg.com/@simplewebauthn/browser/dist/bundle/index.umd.min.js"></script>
+  </head>
+
+  <body>
+    <h1>Login with Backup Code</h1>
+    <label>
+      Email
+      <input id="email" type="email" placeholder="you@example.com" required/>
+    </label>
+    <br>
+    <br>
+    <label>
+      code
+      <input id="code" type="text"  placeholder="A1B2C3D4" required/>
+    </label>
+    <button id="btnRegister">Enter</button>
+
+    <pre id="msg" style="white-space: pre-wrap; margin-top: 16px;"></pre>
+
+    <p><a href="{{ url_for('index') }}">Back to home</a></p>
+
+<script>
+document.getElementById('btnRegister').addEventListener('click', async (e) => {
+    e.preventDefault();
+    const msgEl = document.getElementById('msg');
+    const email = document.getElementById('email').value;
+    const code = document.getElementById('code').value;
+    
+try {
+          const response = await fetch('/login/backup-code', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, code }),
+          });
+          const raw = await response.text();
+          let data = null;
+          try {
+            data = JSON.parse(raw);
+          } catch {
+            msgEl.textContent = `Server returned non-JSON:\n${raw}`;
+            return;
+          }
+
+          if (response.ok && data.ok) {
+            window.location.href = data.redirect || '/dashboard';
+          } else {
+            msgEl.textContent = data.error || 'Login failed.';
+          }
+        } catch (err) {
+          msgEl.textContent = `Request failed: ${err}`;
+        }
+      });
+</script>
+  </body>
+</html>
+
+
+
+
+
+
+
+
+
