@@ -15,38 +15,51 @@
 
     <p><a href="{{ url_for('logout') }}">Logout</a></p>
 
-    <script>
-        document.getElementById("btnReauth").addEventListener("click", async () => {
-            try {
-                const startRes = await fetch("/login/start", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ email: "{{ current_user.email }}" }),
-                });
+<script>
+  const userEmail = "{{ current_user.email }}"; 
+  
+  document.getElementById('btnReauth').addEventListener('click', async () => {
+    try {
+      // Get authentication challenge
+      const startRes = await fetch('/login/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: userEmail }),
+      });
+      
+      const startData = await startRes.json();
+      if (!startRes.ok) throw new Error('START failed: ' + startData.error);
+      
+      // SAuthenticate with passkey
+      const authResp = await SimpleWebAuthnBrowser.startAuthentication(startData);
+      
+      // Verify authentication
+      const finishRes = await fetch('/login/finish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          email: userEmail, 
+          credential: authResp,
+          is_reauth: true 
+        }),
+      });
+      
+      const finishData = await finishRes.json();
+      
+      if (finishData.ok) {
+        // redirect back to where user came from
+        const nextUrl = "{{ session.get('next_url', '/dashboard') }}";
+        window.location.href = nextUrl;
+      } else {
+        document.getElementById('msg').textContent = 'Error: ' + finishData.error;
+        document.getElementById('msg').style.color = 'red';
+      }
+    } catch (err) {
+      document.getElementById('msg').textContent = 'Error: ' + err.message;
+      document.getElementById('msg').style.color = 'red';
+    }
+  });
+</script>
 
-                const startData = await startRes.json();
-                if (!startRes.ok) throw new Error(`START failed: ${startData.error}`);
-
-                const authResp = await SimpleWebAuthnBrowser.startAuthentication(startData);
-                
-                const finishRes = await fetch("/login/finish", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ email: "{{ current_user.email }}", credential: authResp })
-                });
-
-                const finishData = await finishRes.json();
-            
-                if (finishData.ok) {
-                    window.location.href = finishData.redirect || "/dashboard";
-                } else {
-                    document.getElementById("msg").textContent = "Error: " + finishData.error;
-                }
-                
-            } catch (err) {
-                document.getElementById("msg").textContent = "Error: " + err.message;
-            }
-        });
-    </script>
 </body>
 </html>

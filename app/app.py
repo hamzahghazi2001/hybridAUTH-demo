@@ -426,12 +426,23 @@ def login_finish():
         user.failed_login_attempts = 0
         user.locked_until = None
         db.session.commit()
-
-        # Log the user in
+        
+        # Log the user in 
         login_user(user, remember=True)
         session['last_auth_time'] = datetime.now(timezone.utc).isoformat()
         
-        return jsonify({"ok": True, "redirect": "/dashboard"})
+        # Check if this is a re-authentication
+        data = request.get_json() or {}
+        is_reauth = data.get('is_reauth', False)
+        
+        if is_reauth:
+            # Redirect back to protected page
+            next_url = session.pop('next_url', '/dashboard')
+            return jsonify({"ok": True, "redirect": next_url})
+        else:
+            # Normal login 
+            return jsonify({"ok": True, "redirect": "/dashboard"})
+
     else:
         # Increment failed attempts
         user.failed_login_attempts += 1

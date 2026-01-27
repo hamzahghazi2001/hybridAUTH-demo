@@ -4,7 +4,7 @@ import smtplib
 from email.mime.text import MIMEText
 from datetime import datetime, timezone, timedelta
 from functools import wraps
-from flask import session, redirect, url_for
+from flask import session, redirect, url_for, request
 from flask_login import login_required
 
 def send_recovery_email(user_email, token):
@@ -98,18 +98,35 @@ def require_recent_auth(max_age_minutes=10):
         def decorated_function(*args, **kwargs):
             last_auth = session.get('last_auth_time')
             
+            # If no auth timestamp, require re-auth
             if not last_auth:
+                session['next_url'] = request.url
                 return redirect(url_for('reauth'))
             
-            last_auth_dt = datetime.fromisoformat(last_auth)
-            age = datetime.now(timezone.utc) - last_auth_dt
-            
-            if age > timedelta(minutes=max_age_minutes):
+            # Parse timestamp
+            try:
+                last_auth_dt = datetime.fromisoformat(last_auth)
+                
+                if last_auth_dt.tzinfo is None:
+                    last_auth_dt = last_auth_dt.replace(tzinfo=timezone.utc)
+                
+                # Calculate age
+                age = datetime.now(timezone.utc) - last_auth_dt
+                
+                # Check if too old
+                if age > timedelta(minutes=max_age_minutes):
+                    session['next_url'] = request.url
+                    return redirect(url_for('reauth'))
+                
+                return f(*args, **kwargs)
+                
+            except (ValueError, AttributeError):
+                session['next_url'] = request.url
                 return redirect(url_for('reauth'))
-            
-            return f(*args, **kwargs)
+        
         return decorated_function
     return decorator
+
 
 def generate_backup_codes(db, BackupCode, user_id, count=5):
     """Generate new backup codes for a user."""
