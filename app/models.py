@@ -10,6 +10,7 @@ class User(db.Model, UserMixin):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     failed_login_attempts = db.Column(db.Integer, default=0)
     locked_until = db.Column(db.DateTime, nullable=True)
+    email_verified = db.Column(db.Boolean, default=False)
     credentials = db.relationship('Credential', backref='user', lazy=True, cascade='all, delete-orphan')
     challenges = db.relationship('WebAuthnChallenge', backref='user', lazy=True, cascade='all, delete-orphan')
 
