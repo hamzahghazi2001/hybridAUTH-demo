@@ -7,7 +7,7 @@ from flask import Flask, jsonify, render_template, request, session, redirect, u
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from models import db, User, Credential, WebAuthnChallenge, RecoveryToken, BackupCode
 import security
-from helpers import require_recent_auth, send_recovery_email, generate_backup_codes, verify_backup_code
+from helpers import require_recent_auth, send_recovery_email, generate_backup_codes, verify_backup_code,send_registration_email
 
 load_dotenv()
 
@@ -81,29 +81,45 @@ def change_email():
 def recover_request():
     if request.method == 'GET':
         return render_template('login_email.html')
+    
     data = request.get_json() or {}
     email = data.get('email', '').strip().lower()
+    context = data.get('context', 'recovery')
+    
     if not email or '@' not in email:
         return jsonify({"error": "Invalid email"}), 400
     
     user = User.query.filter_by(email=email).first()
     
-    if not user:
-        # Pretend message
-        return jsonify({"ok": True, "message": "If account exists, email sent"})
+    # REGISTRATION CONTEXT
+    if context == 'register':
+        if user and user.email_verified:
+            return jsonify({"error": "Account exists. Please login."}), 400
+        
+        # Create user if doesn't exist
+        if not user:
+            user = User(email=email, email_verified=False)
+            db.session.add(user)
+            db.session.commit()
     
-    #Rate limiting check
+    # RECOVERY CONTEXT
+    else:
+        if not user:
+            # Pretend message
+            return jsonify({"ok": True, "message": "If account exists, email sent"})
+    
+    # Rate limiting check
     now = datetime.now(timezone.utc)
     previous_token = RecoveryToken.query.filter_by(
-        user_id=user.id, 
+        user_id=user.id,
         used=False
     ).order_by(RecoveryToken.created_at.desc()).first()
-
+    
     if previous_token:
         db_created_at = previous_token.created_at
         if db_created_at.tzinfo is None:
             db_created_at = db_created_at.replace(tzinfo=timezone.utc)
-
+        
         time_since_last = now - db_created_at
         
         if time_since_last < timedelta(minutes=5):
@@ -112,37 +128,41 @@ def recover_request():
             return jsonify({
                 "ok": False,
                 "error": f"Too many requests. Please wait {minutes_left} more minute(s)."
-            }), 429 
+            }), 429
         else:
             RecoveryToken.query.filter_by(user_id=user.id, used=False).delete()
             db.session.commit()
-
-
-    #Generate new token
+    
+    # Generate new token
     token_string = secrets.token_urlsafe(32)
-    token_hash = hashlib.sha256(token_string.encode()).hexdigest() 
-    expires_at = now + timedelta(minutes=15) 
-
+    token_hash = hashlib.sha256(token_string.encode()).hexdigest()
+    expires_at = now + timedelta(minutes=15)
+    
     recovery_token = RecoveryToken(
         user_id=user.id,
-        token=token_hash, 
+        token=token_hash,
         created_at=now,
         expires_at=expires_at,
         used=False
     )
+    
     db.session.add(recovery_token)
     db.session.commit()
     
+    # Send different emails based on email_verified
+    if user.email_verified:
+        send_recovery_email(user.email, token_string)
+        message = "If account exists, recovery link sent"
+    else:
+        send_registration_email(user.email, token_string)
+        message = "Verification email sent. Check your inbox to complete registration."
     
-    send_recovery_email(user.email, token_string) 
-    return jsonify({
-        "ok": True,
-        "message": "If account exists, recovery link sent"
-    })
+    return jsonify({"ok": True, "message": message})
+
 
 @app.route('/recover/email')
 def recover():
-    """Process recovery link from email"""
+    """Process links from email"""
         
     token_string = request.args.get('token')
 
@@ -170,15 +190,25 @@ def recover():
     
     user = User.query.filter_by(id=token.user_id).first()
     
-    # Log them User in 
+    user.email_verified = True
+    db.session.commit()
+
+
+    # Log them in
     login_user(user, remember=True)
     session['last_auth_time'] = datetime.now(timezone.utc).isoformat()
-    
-    # Mark user re-enroll
+
+    # Mark user needs passkey
     session['needs_passkey_reregister'] = True
 
-    # Redirect to dashboard
-    return redirect(url_for('recover_reregister'))
+    # Get context from URL
+    context = request.args.get('context', 'recovery')
+
+    # Redirect based on context
+    if context == 'register':
+        return redirect(url_for('register_success'))
+    else:
+        return redirect(url_for('recover_reregister'))
 
 @app.route("/login/backup-code", methods=["GET", "POST"])
 def login_backup():
@@ -255,27 +285,40 @@ def recover_reregister():
 
     return render_template('recover_reregister.html', email=current_user.email)
 
+@app.route('/register/success')
+@login_required
+def register_success():
+    if not session.get('needs_passkey_reregister'):
+        return redirect(url_for('dashboard'))
+    return render_template('register_success.html', email=current_user.email)
+
 # Registration endpoints
 @app.route("/register/start", methods=["POST"])
 def register_start():
+    """Start passkey registration"""
     data = request.get_json() or {}
     email = data.get("email", "").strip().lower()
-
+    
     if not email or "@" not in email or "." not in email:
         return jsonify({"error": "invalid_email"}), 400
-
+    
     is_reregister = bool(data.get("reregister", False))
-
     user = User.query.filter_by(email=email).first()
-
+    
+    # Check email verification 
+    if not is_reregister:
+        if not user or not user.email_verified:
+            return jsonify({"error": "email_not_verified"}), 403
+    
     if user and not is_reregister:
         return jsonify({"error": "Already a user"}), 400
-
-    if not user:
-        user = User(email=email)
+    
+    # Only create user during re-registration
+    if not user and is_reregister:
+        user = User(email=email, email_verified=True)
         db.session.add(user)
         db.session.commit()
-
+    
     try:
         options = security.prepare_credential_creation(
             user=user,

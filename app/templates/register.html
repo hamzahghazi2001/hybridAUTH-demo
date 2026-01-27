@@ -3,21 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Register (Passkey)</title>
-
-    <script src="https://unpkg.com/@simplewebauthn/browser/dist/bundle/index.umd.min.js"></script>
+    <title>Register</title>
   </head>
 
   <body>
-    <h1>Create an account (Passkey)</h1>
+    <h1>Create an account</h1>
+    <p>Enter your email to get started. We'll send you a verification link.</p>
+    
     <label>
       Email
       <input id="email" type="email" placeholder="you@example.com" />
     </label>
-    <button id="btnRegister">Create passkey</button>
+    <button id="btnRegister">Send Verification Email</button>
 
     <pre id="msg" style="white-space: pre-wrap; margin-top: 16px;"></pre>
 
+    <p>Already have an account? <a href="{{ url_for('login') }}">Login</a></p>
     <p><a href="{{ url_for('index') }}">Back to home</a></p>
 
     <script>
@@ -25,44 +26,28 @@
         const email = document.getElementById("email").value;
 
         try {
-          // get options from server
-          const startRes = await fetch("/register/start", {
+          const response = await fetch("/login/email-request", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email }),
+            body: JSON.stringify({ 
+              email: email,
+              context: "register"
+            }),
           });
 
-          
-          const startText = await startRes.text();
-          if (!startRes.ok) throw new Error(`START failed ${startRes.status}: ${startText.slice(0, 120)}`);
+          const data = await response.json();
 
-          const startData = JSON.parse(startText);
-
-          
-          const options = startData.publicKey ?? startData;
-
-          //create passkey
-          const regResp = await SimpleWebAuthnBrowser.startRegistration(options);
-
-          //  send credential to server
-          const finishRes = await fetch("/register/finish", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email, credential: regResp }),
-          });
-
-          const finishText = await finishRes.text();
-          if (!finishRes.ok) throw new Error(`FINISH failed ${finishRes.status}: ${finishText.slice(0, 200)}`);
-
-          const finishData = JSON.parse(finishText);
-
-          if (finishData.ok) {
-            document.getElementById("msg").textContent = "Success: passkey saved.";
+          if (data.ok) {
+            document.getElementById("msg").textContent = "✓ " + data.message;
+            document.getElementById("msg").style.color = "green";
+            document.getElementById("btnRegister").disabled = true;
           } else {
-            document.getElementById("msg").textContent = "Server rejected: " + JSON.stringify(finishData);
+            document.getElementById("msg").textContent = "✗ " + data.error;
+            document.getElementById("msg").style.color = "red";
           }
         } catch (err) {
           document.getElementById("msg").textContent = "Error: " + err.message;
+          document.getElementById("msg").style.color = "red";
         }
       });
     </script>

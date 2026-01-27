@@ -13,7 +13,7 @@ def send_recovery_email(user_email, token):
     """
     try:
         #Build the recovery URL
-        recovery_url = f"http://localhost:5000/recover/email?token={token}"
+        recovery_url = f"http://localhost:5000/recover/email?token={token}&context=recovery"
         
         #Create email body
         email_body = f"""
@@ -47,6 +47,46 @@ Your App Team
         
     except Exception as e:
         print(f" Error sending email: {e}")
+        return False
+
+
+def send_registration_email(user_email, token):
+    """
+    Send registration magic link to new user
+    """
+    try:
+        # Build the registration URL 
+        registration_url = f"http://localhost:5000/recover/email?token={token}&context=register"
+        
+        
+        email_body = f"""
+Hello,
+
+Thanks for signing up! Click below to verify your email and create your passkey:
+
+{registration_url}
+
+This link is valid for 15 minutes and can only be used once.
+
+If you didn't request this, ignore this email.
+
+Thanks,
+Your App Team
+"""
+        
+        msg = MIMEText(email_body)
+        msg['Subject'] = 'Verify Your Email - Complete Registration'
+        msg['From'] = 'noreply@yourapp.com'
+        msg['To'] = user_email
+        
+        with smtplib.SMTP('localhost', 1025) as server:
+            server.send_message(msg)
+        
+        print(f"Registration email sent to {user_email}")
+        return True
+        
+    except Exception as e:
+        print(f"Error sending email: {e}")
         return False
 
 
