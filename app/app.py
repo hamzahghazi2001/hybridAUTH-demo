@@ -12,13 +12,22 @@ from helpers import require_recent_auth, send_recovery_email, generate_backup_co
 load_dotenv()
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'a3f2b9c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1')
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
+
+@app.after_request
+def add_no_cache_headers(response):
+    # Prevent showing cached authenticated pages after logout
+    if current_user.is_authenticated:
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
 
 # Database setup
 os.makedirs(app.instance_path, exist_ok=True)
@@ -55,7 +64,14 @@ def register():
 def logout():
     logout_user()
     session.clear()
-    return redirect(url_for('index'))
+    response = redirect(url_for('index'))
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    response.delete_cookie(app.config.get("SESSION_COOKIE_NAME", "session"))
+    response.delete_cookie("remember_token")         
+
+    return response
 
 @app.route('/reauth')
 @login_required
@@ -63,16 +79,19 @@ def reauth():
     return render_template('reauth.html')
 
 @app.route('/settings')
+@login_required
 @require_recent_auth(max_age_minutes=10)
 def settings():
     return render_template('settings.html',email=current_user.email)
 
 @app.route('/settings/change-email')
+@login_required
 @require_recent_auth(max_age_minutes=10)
 def change_Code():
     return render_template('change_email.html',email=current_user.email)
 
 @app.route('/settings/backup-code')
+@login_required
 @require_recent_auth(max_age_minutes=10)
 def change_email():
     return render_template('genbackup.html')
