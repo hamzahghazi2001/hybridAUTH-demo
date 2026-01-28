@@ -68,7 +68,7 @@ def logout():
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     response.headers['Pragma'] = 'no-cache'
     response.headers['Expires'] = '0'
-    response.delete_cookie(app.config.get("SESSION_COOKIE_NAME", "session"))
+    response.delete_cookie(app.session_cookie_name)      
     response.delete_cookie("remember_token")         
 
     return response
@@ -79,19 +79,19 @@ def reauth():
     return render_template('reauth.html')
 
 @app.route('/settings')
-@login_required
+@login_require
 @require_recent_auth(max_age_minutes=10)
 def settings():
     return render_template('settings.html',email=current_user.email)
 
 @app.route('/settings/change-email')
-@login_required
+@login_require
 @require_recent_auth(max_age_minutes=10)
 def change_Code():
     return render_template('change_email.html',email=current_user.email)
 
 @app.route('/settings/backup-code')
-@login_required
+@login_require
 @require_recent_auth(max_age_minutes=10)
 def change_email():
     return render_template('genbackup.html')
