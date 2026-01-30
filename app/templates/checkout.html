@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}Checkout{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">Checkout</h2>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card mb-4">
+            <div class="card-header">Order Summary</div>
+            <div class="card-body">
+                <div id="order-items">Loading...</div>
+                <hr>
+                <div class="d-flex justify-content-between">
+                    <strong>Total</strong>
+                    <strong>$<span id="order-total">0.00</span></strong>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">Complete Purchase</div>
+            <div class="card-body">
+                <p class="text-muted small">Logged in as: {{ email }}</p>
+                <button class="btn btn-primary w-100" id="complete-purchase">Complete Purchase</button>
+                <div id="msg" class="mt-3"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="mt-3">
+    <a href="{{ url_for('cart') }}">&larr; Back to Cart</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Load order summary
+const cart = JSON.parse(localStorage.getItem('cart') || '[]');
+const itemsEl = document.getElementById('order-items');
+const totalEl = document.getElementById('order-total');
+
+if (cart.length === 0) {
+    itemsEl.innerHTML = '<p class="text-muted">No items in cart</p>';
+    document.getElementById('complete-purchase').disabled = true;
+} else {
+    let html = '';
+    let total = 0;
+    cart.forEach(item => {
+        const subtotal = item.price * item.qty;
+        total += subtotal;
+        html += `<div class="d-flex justify-content-between mb-2">
+            <span>${item.name} x${item.qty}</span>
+            <span>$${subtotal.toFixed(2)}</span>
+        </div>`;
+    });
+    itemsEl.innerHTML = html;
+    totalEl.textContent = total.toFixed(2);
+}
+
+document.getElementById('complete-purchase').addEventListener('click', async () => {
+    const msgEl = document.getElementById('msg');
+    msgEl.innerHTML = '<span class="text-muted">Processing...</span>';
+    
+    try {
+        const response = await fetch('/checkout/complete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cart: cart })
+        });
+        
+        if (response.status === 401) {
+            // Redirected to reauth
+            window.location.href = '/reauth';
+            return;
+        }
+        
+        if (response.redirected) {
+            window.location.href = response.url;
+            return;
+        }
+        
+        const data = await response.json();
+        
+        if (data.ok) {
+            localStorage.removeItem('cart');
+            msgEl.innerHTML = '<div class="alert alert-success">Order placed successfully!</div>';
+            document.getElementById('complete-purchase').disabled = true;
+        } else {
+            msgEl.innerHTML = `<div class="alert alert-danger">${data.error || 'Failed to complete order'}</div>`;
+        }
+    } catch (err) {
+        msgEl.innerHTML = `<div class="alert alert-danger">Error: ${err.message}</div>`;
+    }
+});
+</script>
+{% endblock %}

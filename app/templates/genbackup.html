@@ -1,75 +1,70 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Generate Backup Codes</title>
-  </head>
+{% extends "base.html" %}
 
-  <body>
-    <h1>Generate Backup Codes</h1>
+{% block title %}Backup Codes{% endblock %}
 
-    <p>
-      Backup codes are single-use recovery codes. Generate a new set and store them securely.
-      Generating a new set should invalidate the old set.
-    </p>
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-header">Generate Backup Codes</div>
+            <div class="card-body">
+                <p class="text-muted">Backup codes are single-use recovery codes. Store them securely. Generating a new set invalidates any previous codes.</p>
+                
+                <button class="btn btn-primary" id="btnGenerate">Generate New Backup Codes</button>
+                
+                <div id="msg" class="mt-4" style="white-space: pre-wrap;"></div>
+            </div>
+        </div>
+        
+        <div class="mt-3">
+            <a href="{{ url_for('settings') }}">&larr; Back to Settings</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
 
-    <button id="btnGenerate">Generate new backup codes</button>
+{% block scripts %}
+<script>
+const btn = document.getElementById('btnGenerate');
+const msgEl = document.getElementById('msg');
 
-    <pre id="msg" style="white-space: pre-wrap; margin-top: 16px;"></pre>
+btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    btn.textContent = 'Generating...';
+    msgEl.textContent = '';
 
-    <p>
-      <a href="{{ url_for('settings') }}">Back to settings</a> |
-      <a href="{{ url_for('index') }}">Back to home</a>
-    </p>
-
-    <script>
-      const btn = document.getElementById('btnGenerate');
-      const msgEl = document.getElementById('msg');
-
-      btn.addEventListener('click', async () => {
-        msgEl.textContent = 'Generating...';
-
-        try {
-          const response = await fetch('/backup-codes/generate', {
+    try {
+        const response = await fetch('/backup-codes/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({}) 
-          });
+            body: JSON.stringify({})
+        });
 
-          const raw = await response.text();
-          let data = null;
-          try {
-            data = JSON.parse(raw);
-          } catch {
-            msgEl.textContent = `Server returned non-JSON:\n${raw}`;
-            return;
-          }
+        const data = await response.json();
 
-          if (response.ok && data.ok) {
-            // Show codes ONCE
-            let out = '';
-            out += (data.message || 'Save these codes securely. They will not be shown again.') + '\n\n';
-            out += 'BACKUP CODES:\n';
-            for (const c of (data.codes || [])) out += `- ${c}\n`;
-
-            out += '\nIMPORTANT:\n';
-            out += '- Store these offline (password manager / notes locked).\n';
-            out += '- Anyone with a code can recover the account.\n';
-            out += '- Each code should work once.\n';
-
-            msgEl.textContent = out;
-
+        if (response.ok && data.ok) {
+            let html = '<div class="alert alert-success">';
+            html += '<strong>Save these codes securely. They will not be shown again.</strong>';
+            html += '</div>';
+            html += '<div class="card bg-light"><div class="card-body"><code>';
+            for (const c of (data.codes || [])) {
+                html += c + '<br>';
+            }
+            html += '</code></div></div>';
+            html += '<p class="mt-3 text-muted small">Each code can only be used once.</p>';
             
-            btn.disabled = true;
-            btn.textContent = 'Codes generated (refresh to generate again)';
-          } else {
-            msgEl.textContent = 'Error: ' + (data.error || 'Unknown error');
-          }
-        } catch (err) {
-          msgEl.textContent = 'Network error: ' + err.message;
+            msgEl.innerHTML = html;
+            btn.textContent = 'Codes Generated';
+        } else {
+            msgEl.innerHTML = '<div class="alert alert-danger">' + (data.error || 'Unknown error') + '</div>';
+            btn.disabled = false;
+            btn.textContent = 'Generate New Backup Codes';
         }
-      });
-    </script>
-  </body>
-</html>
+    } catch (err) {
+        msgEl.innerHTML = '<div class="alert alert-danger">Network error: ' + err.message + '</div>';
+        btn.disabled = false;
+        btn.textContent = 'Generate New Backup Codes';
+    }
+});
+</script>
+{% endblock %}

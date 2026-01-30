@@ -68,7 +68,6 @@ def logout():
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     response.headers['Pragma'] = 'no-cache'
     response.headers['Expires'] = '0'
-    response.delete_cookie(app.session_cookie_name)      
     response.delete_cookie("remember_token")         
 
     return response
@@ -79,19 +78,19 @@ def reauth():
     return render_template('reauth.html')
 
 @app.route('/settings')
-@login_require
+@login_required
 @require_recent_auth(max_age_minutes=10)
 def settings():
     return render_template('settings.html',email=current_user.email)
 
 @app.route('/settings/change-email')
-@login_require
+@login_required
 @require_recent_auth(max_age_minutes=10)
 def change_Code():
     return render_template('change_email.html',email=current_user.email)
 
 @app.route('/settings/backup-code')
-@login_require
+@login_required
 @require_recent_auth(max_age_minutes=10)
 def change_email():
     return render_template('genbackup.html')
@@ -283,6 +282,26 @@ def login_backup():
         return jsonify({"error": "account_locked", "locked_until": locked_until.isoformat()}), 403
 
     return jsonify({"error": "invalid_credentials"}), 401
+
+@app.route('/products')
+def products():
+    return render_template('products.html')
+
+@app.route('/cart')
+def cart():
+    return render_template('cart.html')
+
+@app.route('/checkout')
+@login_required
+def checkout():
+    return render_template('checkout.html', email=current_user.email)
+
+@app.route('/checkout/complete', methods=['POST'])
+@login_required
+@require_recent_auth(max_age_minutes=10)
+def checkout_complete():
+    # Demo: just return success
+    return jsonify({"ok": True, "message": "Order placed successfully!"})
 
 
 @app.route('/backup-codes/generate', methods=['POST'])

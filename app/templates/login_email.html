@@ -1,47 +1,76 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Recovery Page Email</title>
-</head>
-<body>
-    <p>Please enter email here for account recovery</p>
-    <input type="email" id="email" placeholder="you@example.com">
-    <button id="btnRequest">Send Login Link</button>
-    <pre id="msg"></pre>
-     <p>
-    <a href="{{ url_for('login') }}">Back to login</a> |
-    <a href="{{ url_for('index') }}">Back to home</a>
-</p>
-</body>
-<script>
-    document.getElementById('btnRequest').addEventListener('click', async () => {
-    
-        const email = document.getElementById('email').value
-        const msg = document.getElementById('msg')
-    
-        if (!email) {
-            msg.textContent = 'Please enter your email'
+{% extends "base.html" %}
 
-        }
-        try {
-            const response = await fetch('/login/email-request', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: email })  
-            })
+{% block title %}Account Recovery{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="card">
+        <div class="card-body">
+            <h4 class="card-title text-center mb-4">Account Recovery</h4>
+            <p class="text-muted text-center small mb-4">Enter your email to receive a login link</p>
             
-            const data = await response.json()
-            if (data.ok) {
-                msg.textContent = data.message + '\n\nCheck Mailpit at http://localhost:8025'
-            } else {
-                msg.textContent = 'Error: ' + (data.error || 'Unknown error')
-            }
+            <div class="mb-3">
+                <label for="email" class="form-label">Email</label>
+                <input type="email" class="form-control" id="email" placeholder="you@example.com">
+            </div>
             
-        } catch (err) {
-            msg.textContent = 'Network error: ' + err.message
+            <button class="btn btn-primary w-100" id="btnRequest">Send Login Link</button>
+            
+            <div id="msg" class="mt-3 small" style="white-space: pre-wrap;"></div>
+        </div>
+    </div>
+    
+    <p class="text-center mt-3">
+        <a href="{{ url_for('login') }}">Back to login</a>
+    </p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('btnRequest').addEventListener('click', async () => {
+    const email = document.getElementById('email').value;
+    const msgEl = document.getElementById('msg');
+    const btn = document.getElementById('btnRequest');
+
+    if (!email) {
+        msgEl.textContent = 'Please enter your email';
+        msgEl.className = 'mt-3 small text-danger';
+        return;
+    }
+    
+    try {
+        btn.disabled = true;
+        btn.textContent = 'Sending...';
+        
+        const response = await fetch('/login/email-request', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email })
+        });
+        
+        const data = await response.json();
+        
+        if (data.ok) {
+            msgEl.textContent = data.message;
+            msgEl.className = 'mt-3 small text-success';
+        } else {
+            msgEl.textContent = data.error || 'Unknown error';
+            msgEl.className = 'mt-3 small text-danger';
+            btn.disabled = false;
+            btn.textContent = 'Send Login Link';
         }
-    })
+        
+    } catch (err) {
+        msgEl.textContent = 'Network error: ' + err.message;
+        msgEl.className = 'mt-3 small text-danger';
+        btn.disabled = false;
+        btn.textContent = 'Send Login Link';
+    }
+});
+
+document.getElementById("email").addEventListener("keypress", (e) => {
+    if (e.key === "Enter") document.getElementById("btnRequest").click();
+});
 </script>
-</html>
+{% endblock %}

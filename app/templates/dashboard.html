@@ -1,16 +1,32 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard After Login</title>
-</head>
-<body>
-    <h1>Dashboard</h1>
-    <p>Congrats you are logged In! {{ email }}</p>
-    <p><a href="{{ url_for('logout') }}">Logout</a></p>
-    <p>Or Go To Settinga</p>
-    <p><a href="{{ url_for('settings') }}">settings</a></p>
+{% extends "base.html" %}
 
-</body>
-</html>
+{% block title %}Account{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">My Account</h2>
+
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">Account Info</div>
+            <div class="card-body">
+                <p><strong>Email:</strong> {{ email }}</p>
+                <p class="text-success small">Logged in with passkey</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">Quick Links</div>
+            <div class="card-body">
+                <ul class="list-unstyled mb-0">
+                    <li class="mb-2"><a href="{{ url_for('products') }}">Browse Products</a></li>
+                    <li class="mb-2"><a href="{{ url_for('cart') }}">View Cart</a></li>
+                    <li class="mb-2"><a href="{{ url_for('settings') }}">Account Settings</a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

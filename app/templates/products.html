@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}Products {% endblock %}
+
+{% block content %}
+<h2 class="mb-4">Products</h2>
+
+<div class="row">
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Wireless Mouse</h5>
+                <p class="card-text text-muted">Ergonomic wireless mouse with long battery life</p>
+                <p class="fw-bold">$29.99</p>
+                <button class="btn btn-outline-primary btn-sm add-to-cart" data-name="Wireless Mouse" data-price="29.99">Add to Cart</button>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Mechanical Keyboard</h5>
+                <p class="card-text text-muted">RGB mechanical keyboard with blue switches</p>
+                <p class="fw-bold">$79.99</p>
+                <button class="btn btn-outline-primary btn-sm add-to-cart" data-name="Mechanical Keyboard" data-price="79.99">Add to Cart</button>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">USB-C Hub</h5>
+                <p class="card-text text-muted">7-in-1 USB-C hub with HDMI and card reader</p>
+                <p class="fw-bold">$49.99</p>
+                <button class="btn btn-outline-primary btn-sm add-to-cart" data-name="USB-C Hub" data-price="49.99">Add to Cart</button>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Webcam HD</h5>
+                <p class="card-text text-muted">1080p webcam with built-in microphone</p>
+                <p class="fw-bold">$59.99</p>
+                <button class="btn btn-outline-primary btn-sm add-to-cart" data-name="Webcam HD" data-price="59.99">Add to Cart</button>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Monitor Stand</h5>
+                <p class="card-text text-muted">Adjustable monitor stand with storage drawer</p>
+                <p class="fw-bold">$39.99</p>
+                <button class="btn btn-outline-primary btn-sm add-to-cart" data-name="Monitor Stand" data-price="39.99">Add to Cart</button>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">Desk Lamp</h5>
+                <p class="card-text text-muted">LED desk lamp with adjustable brightness</p>
+                <p class="fw-bold">$24.99</p>
+                <button class="btn btn-outline-primary btn-sm add-to-cart" data-name="Desk Lamp" data-price="24.99">Add to Cart</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="mt-4">
+    <a href="{{ url_for('cart') }}" class="btn btn-primary">View Cart</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Simple cart using localStorage
+document.querySelectorAll('.add-to-cart').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const name = this.dataset.name;
+        const price = parseFloat(this.dataset.price);
+        
+        let cart = JSON.parse(localStorage.getItem('cart') || '[]');
+        const existing = cart.find(item => item.name === name);
+        
+        if (existing) {
+            existing.qty += 1;
+        } else {
+            cart.push({ name, price, qty: 1 });
+        }
+        
+        localStorage.setItem('cart', JSON.stringify(cart));
+        alert(name + ' added to cart');
+    });
+});
+</script>
+{% endblock %}

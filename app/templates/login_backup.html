@@ -1,71 +1,84 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Backup Code</title>
+{% extends "base.html" %}
 
-    <script src="https://unpkg.com/@simplewebauthn/browser/dist/bundle/index.umd.min.js"></script>
-  </head>
+{% block title %}Backup Code Login {% endblock %}
 
-  <body>
-    <h1>Login with Backup Code</h1>
-    <label>
-      Email
-      <input id="email" type="email" placeholder="you@example.com" required/>
-    </label>
-    <br>
-    <br>
-    <label>
-      code
-      <input id="code" type="text"  placeholder="A1B2C3D4" required/>
-    </label>
-    <button id="btnRegister">Enter</button>
+{% block content %}
+<div class="auth-container">
+    <div class="card">
+        <div class="card-body">
+            <h4 class="card-title text-center mb-4">Login with Backup Code</h4>
+            
+            <div class="mb-3">
+                <label for="email" class="form-label">Email</label>
+                <input type="email" class="form-control" id="email" placeholder="you@example.com" required>
+            </div>
+            
+            <div class="mb-3">
+                <label for="code" class="form-label">Backup Code</label>
+                <input type="text" class="form-control" id="code" placeholder="A1B2C3D4" required>
+            </div>
+            
+            <button class="btn btn-primary w-100" id="btnLogin">Login</button>
+            
+            <div id="msg" class="mt-3 small" style="white-space: pre-wrap;"></div>
+        </div>
+    </div>
+    
+    <p class="text-center mt-3">
+        <a href="{{ url_for('login') }}">Back to login</a>
+    </p>
+</div>
+{% endblock %}
 
-    <pre id="msg" style="white-space: pre-wrap; margin-top: 16px;"></pre>
-
-    <p><a href="{{ url_for('index') }}">Back to home</a></p>
-
+{% block scripts %}
 <script>
-document.getElementById('btnRegister').addEventListener('click', async (e) => {
+document.getElementById('btnLogin').addEventListener('click', async (e) => {
     e.preventDefault();
     const msgEl = document.getElementById('msg');
     const email = document.getElementById('email').value;
     const code = document.getElementById('code').value;
+    const btn = document.getElementById('btnLogin');
     
-try {
-          const response = await fetch('/login/backup-code', {
+    if (!email || !code) {
+        msgEl.textContent = 'Please enter both email and code';
+        msgEl.className = 'mt-3 small text-danger';
+        return;
+    }
+    
+    try {
+        btn.disabled = true;
+        btn.textContent = 'Verifying...';
+        
+        const response = await fetch('/login/backup-code', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, code }),
-          });
-          const raw = await response.text();
-          let data = null;
-          try {
-            data = JSON.parse(raw);
-          } catch {
-            msgEl.textContent = `Server returned non-JSON:\n${raw}`;
-            return;
-          }
+        });
+        
+        const data = await response.json();
 
-          if (response.ok && data.ok) {
+        if (response.ok && data.ok) {
             window.location.href = data.redirect || '/dashboard';
-          } else {
-            msgEl.textContent = data.error || 'Login failed.';
-          }
-        } catch (err) {
-          msgEl.textContent = `Request failed: ${err}`;
+        } else {
+            let errorMsg = 'Login failed';
+            if (data.error === 'account_locked') {
+                errorMsg = 'Account locked. Please try again later.';
+            } else if (data.error === 'invalid_credentials') {
+                errorMsg = 'Invalid email or backup code';
+            } else if (data.error) {
+                errorMsg = data.error;
+            }
+            msgEl.textContent = errorMsg;
+            msgEl.className = 'mt-3 small text-danger';
+            btn.disabled = false;
+            btn.textContent = 'Login';
         }
-      });
+    } catch (err) {
+        msgEl.textContent = 'Request failed: ' + err.message;
+        msgEl.className = 'mt-3 small text-danger';
+        btn.disabled = false;
+        btn.textContent = 'Login';
+    }
+});
 </script>
-  </body>
-</html>
-
-
-
-
-
-
-
-
-
+{% endblock %}

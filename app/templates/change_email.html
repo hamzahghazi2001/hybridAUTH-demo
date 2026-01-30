@@ -1,17 +1,30 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Email Settings</title>
-</head>
-<body>
-    <h1><h1>Change Email</h1>
-    <pre id="msg">{{ email }}</pre>
-    <button id="btnRegister">Change</button>
-</body>
-<script>
+{% extends "base.html" %}
 
+{% block title %}Change Email{% endblock %}
 
-</script>
-</html>
+{% block content %}
+<div class="row">
+    <div class="col-md-6 mx-auto">
+        <div class="card">
+            <div class="card-header">Change Email</div>
+            <div class="card-body">
+                <p class="text-muted">Current email: <strong>{{ email }}</strong></p>
+                
+                <div class="mb-3">
+                    <label for="newEmail" class="form-label">New Email</label>
+                    <input type="email" class="form-control" id="newEmail" placeholder="newemail@example.com">
+                </div>
+                
+                <button class="btn btn-primary" id="btnChange" disabled>Change Email</button>
+                <p class="text-muted small mt-2">Email change functionality is a placeholder for demo purposes.</p>
+                
+                <div id="msg" class="mt-3"></div>
+            </div>
+        </div>
+        
+        <div class="mt-3">
+            <a href="{{ url_for('settings') }}">&larr; Back to Settings</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

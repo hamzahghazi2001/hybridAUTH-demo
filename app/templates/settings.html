@@ -1,19 +1,31 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Settings</title>
-</head>
-<body>
-  <h1>Settings</h1>
+{% extends "base.html" %}
 
-  <p><strong>Account:</strong> {{ email }}</p>
+{% block title %}Settings{% endblock %}
 
-  <ul>
-    <li><a href="{{ url_for('change_Code') }}">Change email</a></li>
-    <li><a href="{{ url_for('change_email') }}">Generate / view backup codes</a></li>
-    <li><a href="{{ url_for('dashboard') }}">Back to dashboard</a></li>
-  </ul>
-</body>
-</html>
+{% block content %}
+<h2 class="mb-4">Account Settings</h2>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">Account</div>
+            <div class="card-body">
+                <p class="mb-3"><strong>Email:</strong> {{ email }}</p>
+                
+                <ul class="list-unstyled">
+                    <li class="mb-2">
+                        <a href="{{ url_for('change_Code') }}" class="btn btn-outline-primary btn-sm">Change Email</a>
+                    </li>
+                    <li class="mb-2">
+                        <a href="{{ url_for('change_email') }}" class="btn btn-outline-primary btn-sm">Manage Backup Codes</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="mt-3">
+            <a href="{{ url_for('dashboard') }}">&larr; Back to Account</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
