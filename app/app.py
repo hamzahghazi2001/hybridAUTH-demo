@@ -5,9 +5,9 @@ from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request, session, redirect, url_for, current_app
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
-from models import db, User, Credential, WebAuthnChallenge, RecoveryToken, BackupCode,AuditLog, 
+from models import db, User, Credential, WebAuthnChallenge, RecoveryToken, BackupCode,AuditLog
 import security
-from helpers import require_recent_auth, send_recovery_email, generate_backup_codes, verify_backup_code,send_registration_email
+from helpers import require_recent_auth, send_recovery_email, generate_backup_codes, verify_backup_code,send_registration_email,log_event
 
 load_dotenv()
 
@@ -143,6 +143,8 @@ def recover_request():
         if time_since_last < timedelta(minutes=5):
             seconds_elapsed  = int(time_since_last.total_seconds())
             minutes_left = 5 - (seconds_elapsed // 60)
+            log_event("recovery_rate_limited", user_id=user.id, 
+            details=f"retry_after={minutes_left}min", success=False) #Event loged for rate limit
             return jsonify({
                 "ok": False,
                 "error": f"Too many requests. Please wait {minutes_left} more minute(s)."
@@ -193,12 +195,19 @@ def recover():
     token_hash = hashlib.sha256(token_string.encode()).hexdigest()
     token = RecoveryToken.query.filter_by(token=token_hash).first()
 
+    # Event log for failed recovery token
+    log_event("recovery_token_failed", details="token_not_found", success=False)
     if not token:
         return "Invalid or expired link", 400
     
     # Check if token is valid 
+
     if not token.is_valid():
-        # Figure out WHY it's invalid
+        # Event log for failed used or epxired token
+        reason = "already_used" if token.used else "expired"
+        log_event("recovery_token_failed", user_id=token.user_id,
+                  details=f"token_id={token.id}, reason={reason}", success=False)
+        
         if token.used:
             return "This link has already been used. Request a new one.", 400
         else:
@@ -207,7 +216,11 @@ def recover():
     #  Mark token as used 
     token.used = True
     db.session.commit()
-    
+    #Event log for recovery token used
+    log_event("recovery_token_redeemed", user_id=token.user_id, 
+              details=f"token_id={token.id}")
+ 
+
     user = User.query.filter_by(id=token.user_id).first()
     
     user.email_verified = True
@@ -217,6 +230,7 @@ def recover():
     # Log them in
     login_user(user, remember=True)
     session['last_auth_time'] = datetime.now(timezone.utc).isoformat()
+    log_event("passkey_login_success", user_id=user.id)
 
     # Mark user needs passkey
     session['needs_passkey_reregister'] = True
@@ -262,6 +276,7 @@ def login_backup():
     if ok:
         user.failed_login_attempts = 0
         user.locked_until = None
+        log_event("backup_code_login_success", user_id=user.id) # Event log for back up code success
         db.session.commit()
 
         login_user(user, remember=True)
@@ -272,8 +287,16 @@ def login_backup():
 
     # failure
     user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
+    #Event log for failed back up code recovery attempt
+    log_event("backup_code_login_failed", user_id=user.id,
+        details=f"attempt={user.failed_login_attempts}/5", success=False)
+
     if user.failed_login_attempts >= 5:
         user.locked_until = now + timedelta(seconds=60)
+        #Event log for account locked 
+        log_event("account_locked", user_id=user.id,
+            details=f"locked_until={user.locked_until.isoformat()}", success=False)
+
     db.session.commit()
 
     locked_until = user.locked_until
@@ -486,11 +509,17 @@ def login_finish():
     else:
         # Increment failed attempts
         user.failed_login_attempts += 1
+        log_event("passkey_login_failed", user_id=user.id,
+        details=f"attempt={user.failed_login_attempts}", success=False)
+
         
         # Lock account after 5 failed attempts
         if user.failed_login_attempts >= 5:
             user.locked_until = datetime.now(timezone.utc) + timedelta(seconds=60)
             db.session.commit()
+            log_event("account_locked", user_id=user.id,
+                details=f"locked_until={user.locked_until.isoformat()}", success=False)
+
             return jsonify({"ok": False, "error": "account_locked"}), 403
         
         db.session.commit()
