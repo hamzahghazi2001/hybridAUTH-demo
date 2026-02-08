@@ -3,9 +3,9 @@ import secrets
 import hashlib
 from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template, request, session, redirect, url_for
+from flask import Flask, jsonify, render_template, request, session, redirect, url_for, current_app
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
-from models import db, User, Credential, WebAuthnChallenge, RecoveryToken, BackupCode
+from models import db, User, Credential, WebAuthnChallenge, RecoveryToken, BackupCode,AuditLog, 
 import security
 from helpers import require_recent_auth, send_recovery_email, generate_backup_codes, verify_backup_code,send_registration_email
 
@@ -141,7 +141,7 @@ def recover_request():
         time_since_last = now - db_created_at
         
         if time_since_last < timedelta(minutes=5):
-            seconds_elapsed = int(time_since_last.total_seconds())
+            seconds_elapsed  = int(time_since_last.total_seconds())
             minutes_left = 5 - (seconds_elapsed // 60)
             return jsonify({
                 "ok": False,
