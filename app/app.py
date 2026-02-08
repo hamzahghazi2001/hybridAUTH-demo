@@ -165,6 +165,8 @@ def recover_request():
     )
     
     db.session.add(recovery_token)
+    #adding a log event to the db for issuing recovery
+    log_event("recovery_token_issued", user_id=user.id, details=f"context={context}")
     db.session.commit()
     
     # Send different emails based on email_verified

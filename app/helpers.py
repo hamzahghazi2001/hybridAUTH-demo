@@ -6,7 +6,8 @@ from datetime import datetime, timezone, timedelta
 from functools import wraps
 from flask import session, redirect, url_for, request
 from flask_login import login_required
-
+from models import db, AuditLog
+        
 def send_recovery_email(user_email, token):
     """
     Send recovery email with magic link
@@ -166,3 +167,18 @@ def verify_backup_code(db, BackupCode, user_id, code):
         backup_code.used_at = datetime.now(timezone.utc)
         db.session.commit()
     return True
+
+def log_event(event_type, user_id=None, details=None, success=True):
+    try:
+        entry = AuditLog(
+            user_id=user_id,              
+            event_type=event_type,       
+            ip_address=request.remote_addr if request else None, 
+            details=details,             
+            success=success   
+        )
+        
+        db.session.add(entry)
+        db.session.commit()
+    except Exception as e:
+        print(f"Audit log error: {e}")
