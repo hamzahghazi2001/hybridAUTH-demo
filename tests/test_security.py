@@ -107,3 +107,20 @@ def fake_login(client, user_id, minutes_ago=0):
         sess['_user_id'] = str(user_id)
         sess['_fresh'] = True
         sess['last_auth_time'] = auth_time.isoformat()
+
+
+def test_T01_magic_link_replay_blocked(client):
+    user = make_user()
+    raw_token = make_token(user.id)
+
+    recovery_url = f"/recover/email?token={raw_token}&context=recovery"
+
+    r1 = client.get(recovery_url, follow_redirects=False)
+    assert r1.status_code in (200, 302), f"Expected 200 or 302, got {r1.status_code}"
+
+    # replay same URL again
+    r2 = client.get(recovery_url, follow_redirects=False)
+    assert r2.status_code in (400, 410), f"Expected 400/410, got {r2.status_code}"
+
+    fail_logs = AuditLog.query.filter_by(event_type="recovery_token_failed").all()
+    assert len(fail_logs) >= 1, "error no logs"
