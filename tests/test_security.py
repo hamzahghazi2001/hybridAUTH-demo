@@ -108,6 +108,33 @@ def fake_login(client, user_id, minutes_ago=0):
         sess['_fresh'] = True
         sess['last_auth_time'] = auth_time.isoformat()
 
+# def test_visit_recovery(client):
+#     user =  make_user()
+#     raw_token = make_token(user.id)
+#     recovery_url =f"/recover/email?token={raw_token}&context=recovery"
+#     response = client.get(recovery_url)
+#     print(response.status_code)
+
+# def test_assert_practice(client):
+#     response = client.get('/health')
+#     assert  response.status_code == 200,  f"Expected 200, got {response.status_code}"
+
+# def test_audit_log_check(client):
+#     user = make_user()
+#     raw_token = make_token(user.id)
+#     recovery_url =f"/recover/email?token={raw_token}&context=recovery"
+#     response = client.get(recovery_url)
+#     logs = AuditLog.query.filter_by(event_type='recovery_token_redeemed').all()
+#     assert len(logs) ==1 , f"error"
+
+# def test_submit_backup_code(client):
+#     user = make_user()
+#     codes = make_backup_codes(user.id)
+#     code = codes[0]
+#     response = client.post('/login/backup-code',
+#     json={"email": user.email, "code": code},
+#     content_type='application/json')
+#     assert response.status_code == 200, f"Expected 200, got {response.status_code}"
 
 def test_T01_magic_link_replay_blocked(client):
     user = make_user()
@@ -124,3 +151,18 @@ def test_T01_magic_link_replay_blocked(client):
 
     fail_logs = AuditLog.query.filter_by(event_type="recovery_token_failed").all()
     assert len(fail_logs) >= 1, "error no logs"
+
+def test_T02_backup_code_replay_blocked(client):
+    user = make_user()
+    codes = make_backup_codes(user.id)
+    code = codes[0]
+    r1 = client.post('/login/backup-code',
+    json={"email": user.email, "code": code},
+    content_type='application/json')
+    assert r1.status_code == 200, f"Expected 200, got {r1.status_code}"
+
+    # replay same code again
+    r2 = client.post('/login/backup-code',
+    json={"email": user.email, "code": code},
+    content_type='application/json')
+    assert r2.status_code == 401, f"Expected 401, got {r2.status_code}"
