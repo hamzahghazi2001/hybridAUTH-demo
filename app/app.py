@@ -195,9 +195,10 @@ def recover():
     token_hash = hashlib.sha256(token_string.encode()).hexdigest()
     token = RecoveryToken.query.filter_by(token=token_hash).first()
 
-    # Event log for failed recovery token
-    log_event("recovery_token_failed", details="token_not_found", success=False)
+
     if not token:
+        # Event log for failed recovery token
+        log_event("recovery_token_failed", details="token_not_found", success=False)
         return "Invalid or expired link", 400
     
     # Check if token is valid 
