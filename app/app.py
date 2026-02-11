@@ -5,9 +5,9 @@ from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request, session, redirect, url_for, current_app
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
-from models import db, User, Credential, WebAuthnChallenge, RecoveryToken, BackupCode,AuditLog
-import security
-from helpers import require_recent_auth, send_recovery_email, generate_backup_codes, verify_backup_code,send_registration_email,log_event
+from .models import db, User, Credential, WebAuthnChallenge, RecoveryToken, BackupCode,AuditLog
+from . import security
+from .helpers import require_recent_auth, send_recovery_email, generate_backup_codes, verify_backup_code,send_registration_email,log_event
 
 load_dotenv()
 

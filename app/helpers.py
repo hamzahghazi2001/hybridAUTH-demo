@@ -6,7 +6,7 @@ from datetime import datetime, timezone, timedelta
 from functools import wraps
 from flask import session, redirect, url_for, request
 from flask_login import login_required
-from models import db, AuditLog
+from .models import db, AuditLog
         
 def send_recovery_email(user_email, token):
     """
