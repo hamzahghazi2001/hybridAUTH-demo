@@ -73,15 +73,6 @@ def make_backup_codes(user_id, count=5):
     return raw_codes
 
 
-def fake_login(client, user_id, minutes_ago=0):
-    """Pretend a user is logged in"""
-    auth_time = datetime.now(timezone.utc) - timedelta(minutes=minutes_ago)
-    with client.session_transaction() as sess:
-        sess['_user_id'] = str(user_id)
-        sess['_fresh'] = True
-        sess['last_auth_time'] = auth_time.isoformat()
-
-
 def make_token(user_id, expired=False):
     """
     Create a recovery token for a user. Returns the raw token string.
@@ -108,18 +99,6 @@ def make_token(user_id, expired=False):
     db.session.commit()
     return raw_token
 
-def make_backup_codes(user_id, count=5):
-    """Create backup codes for a user, Returns list of raw code strings"""
-    raw_codes = []
-    for _ in range(count):
-        raw_code = secrets.token_hex(4).upper()  
-        code_hash = hashlib.sha256(raw_code.encode()).hexdigest()
-        bc = BackupCode(user_id=user_id, code_hash=code_hash, used=False)
-        db.session.add(bc)
-        raw_codes.append(raw_code)
-    db.session.commit()
-    return raw_codes
-
 
 def fake_login(client, user_id, minutes_ago=0):
     """Pretend a user is logged in"""
@@ -128,7 +107,3 @@ def fake_login(client, user_id, minutes_ago=0):
         sess['_user_id'] = str(user_id)
         sess['_fresh'] = True
         sess['last_auth_time'] = auth_time.isoformat()
-
-def test_health_check(client):
-    response = client.get('/health')
-    assert response.status_code == 200
