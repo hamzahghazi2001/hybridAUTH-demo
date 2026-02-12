@@ -72,34 +72,6 @@ def make_backup_codes(user_id, count=5):
     db.session.commit()
     return raw_codes
 
-
-def make_token(user_id, expired=False):
-    """
-    Create a recovery token for a user. Returns the raw token string.
-    If expired=True, the token is already past its TTL.
-    """
-    raw_token = secrets.token_urlsafe(32)
-    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
-
-    if expired:
-        created = datetime.now(timezone.utc) - timedelta(minutes=20)
-        expires = created + timedelta(minutes=15)  # Expired 5 min ago
-    else:
-        created = datetime.now(timezone.utc)
-        expires = created + timedelta(minutes=15)  # Valid for 15 min
-
-    token = RecoveryToken(
-        user_id=user_id,
-        token=token_hash,
-        created_at=created,
-        expires_at=expires,
-        used=False
-    )
-    db.session.add(token)
-    db.session.commit()
-    return raw_token
-
-
 def fake_login(client, user_id, minutes_ago=0):
     """Pretend a user is logged in"""
     auth_time = datetime.now(timezone.utc) - timedelta(minutes=minutes_ago)
@@ -107,34 +79,6 @@ def fake_login(client, user_id, minutes_ago=0):
         sess['_user_id'] = str(user_id)
         sess['_fresh'] = True
         sess['last_auth_time'] = auth_time.isoformat()
-
-# def test_visit_recovery(client):
-#     user =  make_user()
-#     raw_token = make_token(user.id)
-#     recovery_url =f"/recover/email?token={raw_token}&context=recovery"
-#     response = client.get(recovery_url)
-#     print(response.status_code)
-
-# def test_assert_practice(client):
-#     response = client.get('/health')
-#     assert  response.status_code == 200,  f"Expected 200, got {response.status_code}"
-
-# def test_audit_log_check(client):
-#     user = make_user()
-#     raw_token = make_token(user.id)
-#     recovery_url =f"/recover/email?token={raw_token}&context=recovery"
-#     response = client.get(recovery_url)
-#     logs = AuditLog.query.filter_by(event_type='recovery_token_redeemed').all()
-#     assert len(logs) ==1 , f"error"
-
-# def test_submit_backup_code(client):
-#     user = make_user()
-#     codes = make_backup_codes(user.id)
-#     code = codes[0]
-#     response = client.post('/login/backup-code',
-#     json={"email": user.email, "code": code},
-#     content_type='application/json')
-#     assert response.status_code == 200, f"Expected 200, got {response.status_code}"
 
 def test_T01_magic_link_replay_blocked(client):
     user = make_user()
@@ -166,3 +110,93 @@ def test_T02_backup_code_replay_blocked(client):
     json={"email": user.email, "code": code},
     content_type='application/json')
     assert r2.status_code == 401, f"Expected 401, got {r2.status_code}"
+
+def test_T03_expired_token_rejected(client):
+    user = make_user()
+    # make an expired token 
+    raw_token= make_token(user.id, expired=True)
+    recovery_url = f"/recover/email?token={raw_token}&context=recovery"
+
+    response = client.get(recovery_url)
+    assert response.status_code == 400 , f"Expected 400, got {response.status_code}"
+
+def test_T04_old_token_deleted_when_new_created(client):
+    """
+        Testing that the real route deletes old tokens
+        when issuing a new one
+    """
+    user = make_user()
+    old_raw = secrets.token_urlsafe(32)
+    old_hash = hashlib.sha256(old_raw.encode()).hexdigest()
+    token_obj = RecoveryToken(                                
+        user_id=user.id,
+        token=old_hash,
+        created_at=datetime.now(timezone.utc) - timedelta(minutes=6),
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=9),
+        used=False
+    )
+    db.session.add(token_obj)         
+    db.session.commit()
+
+    old_token = RecoveryToken.query.filter_by(token=old_hash).first()
+    assert old_token is not None
+
+    
+    response = client.post('/login/email-request',
+        json={"email": user.email, "context": "recovery"},
+        content_type='application/json')
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+
+    # Old token deleted
+    check_old_token = RecoveryToken.query.filter_by(token=old_hash).first()
+    assert check_old_token is None
+
+    
+    active_token = RecoveryToken.query.filter_by(user_id=user.id, used=False).count()
+    assert active_token == 1, f"Expected 1 active token, got {active_token}"
+
+def test_T05_lockout_after_five_failures(client):
+    user = make_user()
+    codes = make_backup_codes(user.id)
+
+    # burn through 5 wrong attempts
+    for i in range(5):
+        client.post(
+            '/login/backup-code',
+            json={"email": user.email, "code": f"WRONG{i:04d}"},
+            content_type='application/json'
+        )
+
+    # 6th attempt with VALID code should be locked
+    r = client.post(
+        '/login/backup-code',
+        json={"email": user.email, "code": codes[0]},
+        content_type='application/json'
+    )
+
+    assert r.status_code == 403, f"Error: expected 403, got {r.status_code}"
+    assert r.get_json().get('error') == 'account_locked', (
+        f"Error: expected 'account_locked', got {r.get_json().get('error')}"
+    )
+
+    lock_logs = AuditLog.query.filter_by(event_type='account_locked').all()
+    assert len(lock_logs) >= 1, "Error: expected at least 1 account_locked log"
+
+def test_T06_stale_session_blocked(client):
+    user = make_user()
+
+    fake_login(client, user.id, minutes_ago=11)
+
+    r = client.get('/settings', follow_redirects=False)
+
+    assert r.status_code == 302, f"Expected 302, got {r.status_code}"
+    assert '/reauth' in r.headers.get('Location', ''), "Not redirected to /reauth"
+
+def test_T07_recent_session_allowed(client):
+    user = make_user()
+
+    fake_login(client, user.id, minutes_ago=5)
+
+    r = client.get('/settings', follow_redirects=False)
+
+    assert r.status_code == 200, f"Expected 200, got {r.status_code}"
