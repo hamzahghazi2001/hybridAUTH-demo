@@ -358,6 +358,7 @@ def register_success():
 
 # Registration endpoints
 @app.route("/register/start", methods=["POST"])
+@login_required
 def register_start():
     """Start passkey registration"""
     data = request.get_json() or {}
@@ -368,6 +369,13 @@ def register_start():
     
     is_reregister = bool(data.get("reregister", False))
     user = User.query.filter_by(email=email).first()
+    if is_reregister:
+        #Only allowing the re-registration to complete if this flag was set by the server 
+        if not session.get('needs_passkey_reregister'):
+            return jsonify({"error": "not_in_recovery"}), 403
+        elif email != current_user.email:
+            return jsonify({"error": "email_mismatch"}), 403
+        
     
     # Check email verification 
     if not is_reregister:
@@ -376,12 +384,7 @@ def register_start():
     
     if user and not is_reregister:
         return jsonify({"error": "Already a user"}), 400
-    
-    # Only create user during re-registration
-    if not user and is_reregister:
-        user = User(email=email, email_verified=True)
-        db.session.add(user)
-        db.session.commit()
+
     
     try:
         options = security.prepare_credential_creation(
@@ -396,10 +399,14 @@ def register_start():
 
 
 @app.route("/register/finish", methods=["POST"])
+@login_required
 def register_finish():
     """Complete passkey registration."""
     data = request.get_json() or {}
     email = data.get("email", "").strip().lower()
+
+    if email != current_user.email:
+       return jsonify({"error": "email_mismatch"}), 403
     credential = data.get("credential")
     
     if not email or not credential:
