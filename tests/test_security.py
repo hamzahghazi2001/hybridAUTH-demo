@@ -1,5 +1,3 @@
-import sys
-import os
 import hashlib
 import secrets
 import pytest

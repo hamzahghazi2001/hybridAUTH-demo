@@ -92,7 +92,7 @@ def prepare_authentication(user, credentials, db, ChallengeModel):
     for cred in credentials:
         try:
             # decode it for the WebAuthn library
-            cred_id = base64.b64decode(cred.credential_id)
+            cred_id = base64.urlsafe_b64decode(cred.credential_id + '==')
             allowed_creds.append(PublicKeyCredentialDescriptor(id=cred_id))
         except Exception:
             continue  

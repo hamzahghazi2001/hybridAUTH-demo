@@ -43,8 +43,8 @@ document.getElementById('btnReauth').addEventListener('click', async () => {
         const startData = await startRes.json();
         if (!startRes.ok) throw new Error(startData.error || 'Failed to start authentication');
         
-        const authResp = await SimpleWebAuthnBrowser.startAuthentication(startData);
-        
+        const authResp = await SimpleWebAuthnBrowser.startAuthentication({ optionsJSON: startData });
+
         const finishRes = await fetch('/login/finish', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

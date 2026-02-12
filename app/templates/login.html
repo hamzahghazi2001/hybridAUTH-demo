@@ -56,7 +56,7 @@ document.getElementById("btnLogin").addEventListener("click", async () => {
         const startData = await startRes.json();
         if (!startRes.ok) throw new Error(startData.error || "Login failed");
 
-        const authResp = await SimpleWebAuthnBrowser.startAuthentication(startData);
+        const authResp = await SimpleWebAuthnBrowser.startAuthentication({ optionsJSON: startData });
         
         const finishRes = await fetch("/login/finish", {
             method: "POST",

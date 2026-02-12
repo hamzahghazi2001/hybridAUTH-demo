@@ -86,13 +86,13 @@ def settings():
 @app.route('/settings/change-email')
 @login_required
 @require_recent_auth(max_age_minutes=10)
-def change_Code():
+def change_email():
     return render_template('change_email.html',email=current_user.email)
 
 @app.route('/settings/backup-code')
 @login_required
 @require_recent_auth(max_age_minutes=10)
-def change_email():
+def backup_code_page():
     return render_template('genbackup.html')
 
 @app.route('/login/email-request', methods=['GET', 'POST'])

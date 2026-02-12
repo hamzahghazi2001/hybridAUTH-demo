@@ -8,6 +8,3 @@ webauthn==2.0.0
 sendgrid==6.11.0
 gunicorn==21.2.0
 psycopg2-binary==2.9.9
-FLASK_ENV=development
-BASE_URL=http://localhost:5000
-SECRET_KEY=uY8_W4F7-9zR2xLqPmN5V_G8j2k1mPqS5vW6xZ9yA_0

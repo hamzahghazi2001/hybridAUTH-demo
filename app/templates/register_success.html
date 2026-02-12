@@ -51,7 +51,7 @@ document.getElementById("btnRegister").addEventListener("click", async () => {
 
         msgEl.textContent = "Approve the passkey prompt on your device...";
 
-        const regResp = await SimpleWebAuthnBrowser.startRegistration(options);
+        const regResp = await SimpleWebAuthnBrowser.startRegistration({ optionsJSON: options });
 
         msgEl.textContent = "Verifying passkey...";
 

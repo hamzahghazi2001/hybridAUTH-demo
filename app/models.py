@@ -47,8 +47,8 @@ class RecoveryToken(db.Model):
 
     def is_valid(self):
         """Check if token can still be used"""
-        now = datetime.utcnow() 
-        expires_at = self.expires_at.replace(tzinfo=None) if self.expires_at.tzinfo else self.expires_at
+        now = datetime.now(timezone.utc)
+        expires_at = self.expires_at if self.expires_at.tzinfo else self.expires_at.replace(tzinfo=timezone.utc)
         
         if now <= expires_at and self.used != True:
             return True
