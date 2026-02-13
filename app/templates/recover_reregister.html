@@ -71,7 +71,7 @@ document.getElementById("btnRegister").addEventListener("click", async () => {
         if (finishData.ok) {
             msgEl.textContent = "Success! Redirecting...";
             msgEl.className = "mt-3 small text-success";
-            setTimeout(() => (window.location.href = "/dashboard"), 800);
+            setTimeout(() => (window.location.href = finishData.redirect || "/login"), 800);
         } else {
             throw new Error(JSON.stringify(finishData));
         }

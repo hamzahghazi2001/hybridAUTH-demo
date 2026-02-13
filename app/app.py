@@ -29,6 +29,27 @@ def add_no_cache_headers(response):
         response.headers["Expires"] = "0"
     return response
 
+@app.before_request
+def enforce_reregister_gate():
+    if not current_user.is_authenticated:
+        return None
+    if not session.get('needs_passkey_reregister'):
+       return None
+    allowed = [
+        '/recover/reregister',
+        '/recover/email',      
+        '/register/start',
+        '/register/finish',
+        '/register/success',
+        '/login/',         
+        '/logout',
+        '/health',
+        '/static'
+    ]
+    if any(request.path.startswith(p) for p in allowed):
+        return None
+    return redirect(url_for('recover_reregister'))
+
 # Database setup
 os.makedirs(app.instance_path, exist_ok=True)
 db_path = os.path.join(app.instance_path, "database.db")
@@ -428,8 +449,10 @@ def register_finish():
     if result.get("ok"):
         data = request.get_json() or {}
         is_reregister = data.get('reregister', False)
-        if is_reregister:
-            session['needs_passkey_reregister'] = False
+    if is_reregister:
+                logout_user()
+                session.clear()
+                return jsonify({"ok": True, "redirect": "/login"})
 
     return jsonify(result) if result.get("ok") else (jsonify(result), 400)
 
