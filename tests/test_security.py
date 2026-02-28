@@ -165,16 +165,16 @@ def test_T05_lockout_after_five_failures(client):
             content_type='application/json'
         )
 
-    # 6th attempt with VALID code should be locked
-    r = client.post(
+    # 6th attempt with valid code should be locked
+    response = client.post(
         '/login/backup-code',
         json={"email": user.email, "code": codes[0]},
         content_type='application/json'
     )
 
-    assert r.status_code == 403, f"Error: expected 403, got {r.status_code}"
-    assert r.get_json().get('error') == 'account_locked', (
-        f"Error: expected 'account_locked', got {r.get_json().get('error')}"
+    assert response.status_code == 403, f"Error: expected 403, got {response.status_code}"
+    assert response.get_json().get('error') == 'account_locked', (
+        f"Error: expected 'account_locked', got {response.get_json().get('error')}"
     )
 
     lock_logs = AuditLog.query.filter_by(event_type='account_locked').all()
@@ -185,16 +185,62 @@ def test_T06_stale_session_blocked(client):
 
     fake_login(client, user.id, minutes_ago=11)
 
-    r = client.get('/settings', follow_redirects=False)
+    response = client.get('/settings', follow_redirects=False)
 
-    assert r.status_code == 302, f"Expected 302, got {r.status_code}"
-    assert '/reauth' in r.headers.get('Location', ''), "Not redirected to /reauth"
+    assert response.status_code == 302, f"Expected 302, got {response.status_code}"
+    assert '/reauth' in response.headers.get('Location', ''), "Not redirected to /reauth"
 
 def test_T07_recent_session_allowed(client):
     user = make_user()
 
     fake_login(client, user.id, minutes_ago=5)
 
-    r = client.get('/settings', follow_redirects=False)
+    response = client.get('/settings', follow_redirects=False)
 
-    assert r.status_code == 200, f"Expected 200, got {r.status_code}"
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}"
+
+
+#Proving that Unauthenticated user cannot register passkey for any email
+def  test_T08_unauthenticated_register_blocked(client):
+
+    response= client.post('/register/start',
+       json={"email": "attacker@email.com", "reregister": True},
+       content_type='application/json')
+
+    assert response.status_code in (401, 302), f"Expected 401 or 302, got {response.status_code}"
+
+    attacker = User.query.filter_by(email='attacker@email.com').first()
+    assert attacker is None, "Exploit: user was created without authentication"
+
+def test_T09_recovery_session_restricted(client):
+    user = make_user()
+    fake_login(client, user.id, minutes_ago=0)
+
+    # set the recovery flag as true
+    with client.session_transaction() as sess:
+        sess["needs_passkey_reregister"] = True
+
+    response = client.get("/dashboard", follow_redirects=False)
+
+    assert response.status_code == 302, f"Expected 302, got {response.status_code}"
+    assert "/recover/reregister" in response.headers.get("Location", ""), \
+        "Expected redirect to /recover/reregister"
+
+
+# logged-in recovery user cannot register a passkey for a different email address
+def test_T10_email_mismatch_rejected(client):
+    user = make_user()
+    fake_login(client, user.id, minutes_ago=0)
+
+    with client.session_transaction() as sess:
+        sess["needs_passkey_reregister"] = True
+
+    response = client.post(
+        "/register/start",
+        json={"email": "someone_else@example.com", "reregister": True},
+        content_type="application/json",
+    )
+
+    assert response.status_code == 403, f"Expected 403, got {response.status_code}"
+    assert response.get_json().get("error") == "email_mismatch", \
+        f"Expected 'email_mismatch', got {response.get_json().get('error')}"
