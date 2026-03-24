@@ -2,7 +2,7 @@
 
 This repository contains implementation work for my Honours Dissertation.
 
-The project explores a hybrid authentication approach using Passkeys (WebAuthn) with fallback recovery mechanisms such as magic links** and backup codes.
+The project explores a hybrid authentication approach that uses Passkeys (WebAuthn) with fallback recovery mechanisms, such as magic links and backup codes.
 
 The aim is to evaluate whether a passkey-first model with hardened recovery can improve security and usability compared to traditional password-based authentication.
 
@@ -15,4 +15,4 @@ This is an academic research project
 
 
 to start the server
-run Python app/app.py 
+run flask --app app run
